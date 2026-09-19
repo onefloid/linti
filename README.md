@@ -780,6 +780,10 @@ Directory and glob scans reject symlinks whose resolved targets are outside the
 scan root and exit non-zero. Internal links are deduplicated as before. To lint
 an external file intentionally, pass its path explicitly.
 
+In multi-file runs, unreadable, oversized, or malformed process files are
+reported and make the run fail, even when other files have no lint findings.
+Valid unrelated YAML documents are still skipped.
+
 ## License
 
 This project is licensed under the **Apache License 2.0**. See the [LICENSE](LICENSE) file for details.
