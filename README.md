@@ -774,6 +774,12 @@ require formats that provide metadata (`.yaml`, Git JSON+TI, PA-code).
 
 For plain `.ti` files without `#region` sections, the full file is treated as **Prolog**.
 
+### Input safety
+
+Directory and glob scans reject symlinks whose resolved targets are outside the
+scan root and exit non-zero. Internal links are deduplicated as before. To lint
+an external file intentionally, pass its path explicitly.
+
 ## License
 
 This project is licensed under the **Apache License 2.0**. See the [LICENSE](LICENSE) file for details.

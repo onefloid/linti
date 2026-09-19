@@ -123,3 +123,26 @@ def test_config_severity_override_promotes_e110(unparseable: Path):
     result = runner.invoke(app, ["lint", "broken.ti", "--select", "P110"])
     assert "P110" in result.stdout
     assert result.exit_code == 1
+
+
+@pytest.mark.parametrize("glob_input", [False, True])
+def test_auto_fix_rejects_discovered_external_symlink(tmp_path, glob_input):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    outside = tmp_path / "outside.ti"
+    outside.write_text("nA=1;\n")
+    (repo / "link.ti").symlink_to(outside)
+    target = str(repo / "**" / "*.ti") if glob_input else str(repo)
+    result = runner.invoke(app, [target, "--auto-fix"])
+    assert result.exit_code == 1
+    assert "escapes scan root" in result.stderr
+    assert outside.read_text() == "nA=1;\n"
+
+
+def test_internal_symlink_still_supports_auto_fix(tmp_path):
+    target = tmp_path / "process.ti"
+    target.write_text("nA=1;\n")
+    (tmp_path / "link.ti").symlink_to(target)
+    result = runner.invoke(app, [str(tmp_path), "--auto-fix", "--select", "F"])
+    assert result.exit_code == 0
+    assert target.read_text() == "nA = 1;\n"

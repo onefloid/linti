@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import glob as globlib
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pathspec
@@ -152,6 +152,7 @@ class DiscoveryResult:
     files: list[Path]  # canonical, de-duplicated, exclusion-filtered, sorted
     missing: list[str]  # explicit (non-glob) paths that do not exist
     excluded_count: int  # discovered files dropped by an exclusion
+    rejected: list[str] = field(default_factory=list)  # paths escaping a scan root
 
 
 def _process_representative(path: Path) -> Path:
@@ -200,11 +201,16 @@ def discover_process_files(
     collected: list[Path] = []
     missing: list[str] = []
 
-    def _add(candidates: Iterable[Path]) -> None:
+    rejected: list[str] = []
+
+    def _add(candidates: Iterable[Path], root: Path | None = None) -> None:
         for f in candidates:
             # Collapse a Git-deploy .json/.ti pair to one representative before
             # keying, so a glob matching both files lints the process once.
             key = _canonical(_process_representative(f))
+            if root is not None and not key.is_relative_to(root):
+                rejected.append(str(f))
+                continue
             if key not in seen:
                 seen.add(key)
                 collected.append(key)  # store the canonical form (Rule 2)
@@ -214,17 +220,26 @@ def discover_process_files(
         for raw in group.patterns:
             if _looks_like_glob(raw):
                 pattern = raw if Path(raw).is_absolute() else str(anchor / raw)
+                # The fixed prefix defines the scope the user asked to scan.
+                root = Path(Path(pattern).anchor)
+                for part in Path(pattern).parts[1:]:
+                    if _looks_like_glob(part):
+                        break
+                    root /= part
                 _add(
-                    p
-                    for m in globlib.glob(pattern, recursive=True)
-                    if (p := Path(m)).is_file()
-                    and p.suffix.lower() in PROCESS_EXTENSIONS
+                    (
+                        p
+                        for m in globlib.glob(pattern, recursive=True)
+                        if (p := Path(m)).is_file()
+                        and p.suffix.lower() in PROCESS_EXTENSIONS
+                    ),
+                    _canonical(root),
                 )
                 continue
 
             path = anchor / raw
             if path.is_dir():
-                _add(_iter_directory(path))
+                _add(_iter_directory(path), _canonical(path))
             elif path.is_file():
                 _add([path])
             else:
@@ -235,6 +250,7 @@ def discover_process_files(
         files=sorted(kept),
         missing=missing,
         excluded_count=len(collected) - len(kept),
+        rejected=rejected,
     )
 
 

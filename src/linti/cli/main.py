@@ -171,8 +171,11 @@ def lint(
     for missing in result.missing:
         typer.echo(f"Error: Path does not exist: {missing}", err=True)
 
+    for rejected in result.rejected:
+        typer.echo(f"Error: Discovered path escapes scan root: {rejected}", err=True)
+
     if not result.files:
-        if result.missing:
+        if result.missing or result.rejected:
             raise typer.Exit(code=1)
         typer.echo(_no_files_message(paths, result.excluded_count))
         raise typer.Exit(code=0)
@@ -187,7 +190,7 @@ def lint(
         auto_fix=auto_fix,
         select=select,
     )
-    if result.missing:
+    if result.missing or result.rejected:
         exit_code = max(exit_code, 1)
     raise typer.Exit(code=exit_code)
 
