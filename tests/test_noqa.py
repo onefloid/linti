@@ -402,3 +402,68 @@ class TestNoqaIntegration:
         issues = _lint(code)
         line1_f110 = [i for i in issues if i.rule_id == "F110" and i.line == 1]
         assert len(line1_f110) == 0
+
+
+class TestDeprecatedIdLocation:
+    """Deprecated IDs are warned once per use, at a clickable location."""
+
+    @staticmethod
+    def _messages(code: str, **kwargs) -> list[str]:
+        with pytest.warns(LintiConfigWarning) as recorded:
+            parse_noqa(_tokenize(code), **kwargs)
+        return [str(w.message) for w in recorded]
+
+    def test_warning_names_file_line_and_column(self):
+        messages = self._messages(
+            "nVar=1;\nnX = 2; # noqa: F110, S220\n", source_path="proc.ti"
+        )
+        assert messages == [
+            "proc.ti:2:23: Rule ID S220 is deprecated. Use C220 instead."
+        ]
+
+    def test_every_use_is_warned(self):
+        code = "nA=1; # noqa: S220\n# noqa-begin: S220\nnB=2;\n# noqa-end: S220\n"
+        messages = self._messages(code, source_path="proc.ti")
+        assert [m.split(": ", 1)[0] for m in messages] == [
+            "proc.ti:1:15",
+            "proc.ti:2:15",
+            "proc.ti:4:13",
+        ]
+
+    def test_line_offset_maps_to_the_source_file(self):
+        """A procedure embedded in a larger file reports the file's line."""
+        messages = self._messages(
+            "\nnA=1; # noqa: S220\n", source_path="proc.yaml", line_offset=10
+        )
+        assert messages[0].startswith("proc.yaml:11:15: ")
+
+    def test_without_a_path_the_location_is_still_named(self):
+        messages = self._messages("nA=1; # noqa: S220\n")
+        assert messages[0].startswith("line 1, column 15: Rule ID S220")
+
+    def test_warnings_can_be_switched_off(self):
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", LintiConfigWarning)
+            directives = parse_noqa(
+                _tokenize("nA=1; # noqa: S220\n"), warn_deprecated=False
+            )
+        assert directives.is_suppressed("C220", 1) is True
+
+    def test_auto_fix_warns_only_for_the_final_position(self, tmp_path):
+        """Fix passes stay quiet; the final lint reports the settled column."""
+        from linti.linter.api import lint_process
+        from linti.provider.factory import provider_for_path
+
+        path = tmp_path / "proc.ti"
+        path.write_text("nVar=1; # noqa: S220\n")
+        linter = Linter(rules=[WhitespaceAroundOperatorsRule()])
+        provider = provider_for_path(path)
+        [name] = provider.list_processes()
+        with pytest.warns(LintiConfigWarning) as recorded:
+            lint_process(provider, name, linter, auto_fix=True, source_path="proc.ti")
+        assert path.read_text() == "nVar = 1; # noqa: S220\n"
+        assert [str(w.message) for w in recorded] == [
+            "proc.ti:1:19: Rule ID S220 is deprecated. Use C220 instead."
+        ]

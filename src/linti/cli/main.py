@@ -269,6 +269,9 @@ def _install_config_warning_handler() -> None:
     scan rebuilds the rules for every file, so one deprecated setting would
     print once per linted file. Deduplicating on the rendered text instead keeps
     warnings that differ only in their payload (two configs, two paths) apart.
+    A deprecated rule ID in a ``# noqa`` comment carries its ``path:line:col``,
+    so every use is reported (and clickable), while re-lints of the same use
+    still collapse into one line.
     """
     default_showwarning = warnings.showwarning
     seen: set[str] = set()

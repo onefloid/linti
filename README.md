@@ -399,7 +399,13 @@ Multiple rule IDs can be combined with commas: `# noqa: F110, N110, C220`
 
 Deprecated rule IDs (see [Rule ID migration](#rule-id-migration)) still work in
 `noqa` comments for one deprecation cycle; linti resolves them to the canonical
-ID and prints a warning telling you which ID to use instead.
+ID and prints a warning telling you which ID to use instead. The warning is
+printed for **every** use and starts with its `path:line:col`, so terminals and
+editors like VS Code can jump straight to the comment to update:
+
+```
+⚠  process.ti:12:17: Rule ID S220 is deprecated. Use C220 instead.
+```
 
 ## CLI Usage
 
@@ -717,6 +723,9 @@ wherever a rule is referenced by ID — `--select`, `# noqa` comments, and
 ```
 ⚠  Rule ID S220 is deprecated. Use C220 instead.
 ```
+
+In a `# noqa` comment the warning is prefixed with the comment's location
+(`process.ti:12:17: Rule ID S220 is deprecated. ...`), once per use.
 
 Diagnostics always report the **canonical (new)** ID.
 

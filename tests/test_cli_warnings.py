@@ -44,3 +44,20 @@ def test_non_linti_warning_is_delegated_to_default_handler(capsys):
     assert [str(w.message) for w in recorded] == ["unrelated"]
     assert recorded[0].category is UserWarning
     assert "⚠" not in capsys.readouterr().err
+
+
+def test_deprecated_noqa_id_is_printed_for_every_use(capsys):
+    """Each use carries its own location, so none is folded into another."""
+    from linti.lexer.lexer import Lexer
+    from linti.linter.noqa import parse_noqa
+
+    tokens = Lexer("nA=1; # noqa: S220\nnB=2; # noqa: S220\n").tokenize()
+    with warnings.catch_warnings():
+        _install_config_warning_handler()
+        parse_noqa(tokens, source_path="proc.ti")
+        parse_noqa(tokens, source_path="proc.ti")  # a re-lint of the same uses
+
+    err = capsys.readouterr().err
+    assert err.count("S220 is deprecated") == 2
+    assert "proc.ti:1:15: Rule ID S220" in err
+    assert "proc.ti:2:15: Rule ID S220" in err

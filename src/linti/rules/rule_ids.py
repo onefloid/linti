@@ -243,26 +243,51 @@ def resolve_rule_id(rule_id: str) -> tuple[str, bool]:
     return rid, False
 
 
-def warn_if_deprecated(original: str, canonical: str, was_deprecated: bool) -> None:
-    """Emit a deprecation warning when a deprecated ID was used."""
+def _located(message: str, location: str | None) -> str:
+    """Prefix *message* with *location* (e.g. ``path:line:col``) when known."""
+    return f"{location}: {message}" if location else message
+
+
+def warn_if_deprecated(
+    original: str,
+    canonical: str,
+    was_deprecated: bool,
+    *,
+    location: str | None = None,
+) -> None:
+    """Emit a deprecation warning when a deprecated ID was used.
+
+    *location* names where the ID was used (``path:line:col`` for a ``# noqa``
+    comment) and prefixes the message, so terminals and editors can link it
+    straight to the spot to change.
+    """
     if not was_deprecated:
         return
     warnings.warn(
-        f"Rule ID {original.strip().upper()} is deprecated. Use {canonical} instead.",
+        _located(
+            f"Rule ID {original.strip().upper()} is deprecated. "
+            f"Use {canonical} instead.",
+            location,
+        ),
         LintiConfigWarning,
         stacklevel=2,
     )
 
 
-def resolve_and_warn(rule_id: str) -> str:
-    """Resolve *rule_id* and warn if a deprecated ID was used. Return canonical."""
+def resolve_and_warn(rule_id: str, *, location: str | None = None) -> str:
+    """Resolve *rule_id* and warn if a deprecated ID was used. Return canonical.
+
+    *location*, when given, prefixes any warning (see :func:`warn_if_deprecated`).
+    """
     canonical, was_deprecated = resolve_rule_id(rule_id)
-    warn_if_deprecated(rule_id, canonical, was_deprecated)
-    warn_if_rule_deprecated(canonical)
+    warn_if_deprecated(rule_id, canonical, was_deprecated, location=location)
+    warn_if_rule_deprecated(canonical, location=location)
     return canonical
 
 
-def warn_if_rule_deprecated(rule_id: str, *, skipped: bool = False) -> None:
+def warn_if_rule_deprecated(
+    rule_id: str, *, skipped: bool = False, location: str | None = None
+) -> None:
     """Warn about a retained deprecated rule without redirecting its ID.
 
     ``skipped`` reports the successor as having taken over this run, so a
@@ -279,7 +304,10 @@ def warn_if_rule_deprecated(rule_id: str, *, skipped: bool = False) -> None:
         else f"Use {meta.deprecated_by} instead."
     )
     warnings.warn(
-        f"Rule {rule_id.upper()} ({meta.name}) is deprecated. {advice}",
+        _located(
+            f"Rule {rule_id.upper()} ({meta.name}) is deprecated. {advice}",
+            location,
+        ),
         LintiConfigWarning,
         stacklevel=2,
     )

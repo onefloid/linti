@@ -371,7 +371,7 @@ def test_displaced_fix_is_not_lost_across_passes():
             self.max_nesting_depth = 150
             self.max_values_per_variable = 8
 
-        def lint(self, tokens, context=None, ast=None, source=None):
+        def lint(self, tokens, context=None, ast=None, source=None, warn_deprecated_noqa=True):
             return self.batches.pop(0) if self.batches else []
 
     first_pass = [_issue(0, "nA=1", "nB=1"), _issue(2, "", " ")]

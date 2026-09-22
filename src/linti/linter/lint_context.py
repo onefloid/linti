@@ -44,6 +44,9 @@ class LintContext:
         datasource_type: Data source type of the process (``ODBC``, ``ASCII``,
             ``None``, …), or None when the format carries no datasource metadata.
         datasource_query: SQL query of an ODBC data source, or None.
+        source_path: File the procedure was read from, as shown to the user,
+            or None when unknown.  Locates warnings that are not lint issues
+            (deprecated rule IDs in ``# noqa`` comments) as ``path:line:col``.
     """
 
     block: Optional[str] = None
@@ -61,6 +64,7 @@ class LintContext:
     constants: Optional["ConstantEvaluationIndex"] = None
     datasource_type: Optional[str] = None
     datasource_query: Optional[str] = None
+    source_path: Optional[str] = None
     #: Lazily built line model; see :attr:`lines`.
     _line_index: Optional["LineIndex"] = field(default=None, repr=False, compare=False)
 
