@@ -57,8 +57,14 @@ NESTING_DEPTH_METADATA = RuleMetadata(
 )
 
 
-def lint_process_model(process: ProcessIR, linter: Linter) -> list[ProcedureIssue]:
-    """Lint one process model and return procedure-scoped issues."""
+def lint_process_model(
+    process: ProcessIR, linter: Linter, source_path: str | None = None
+) -> list[ProcedureIssue]:
+    """Lint one process model and return procedure-scoped issues.
+
+    *source_path* is the file shown to the user; it locates warnings that are
+    not lint issues (deprecated rule IDs in ``# noqa`` comments).
+    """
     all_issues: list[ProcedureIssue] = []
 
     # Lex/parse each section at most once per run: the lint loop populates
@@ -73,6 +79,7 @@ def lint_process_model(process: ProcessIR, linter: Linter) -> list[ProcedureIssu
 
     for proc_name, proc_info in extract_procedures(process).items():
         lint_ctx = LintContext.for_procedure(process, proc_name, proc_info, constants)
+        lint_ctx.source_path = source_path
         parsed = parse_cache.get(proc_name)
         if parsed.error is not None:
             # The section could not be parsed at all, so no rule ever sees it.
@@ -103,8 +110,12 @@ def lint_process(
     process_name: str,
     linter: Linter,
     auto_fix: bool = False,
+    source_path: str | None = None,
 ) -> dict[str, list[ProcedureIssue]]:
-    """Lint one process and return results keyed by process name."""
+    """Lint one process and return results keyed by process name.
+
+    *source_path* is passed through to :func:`lint_process_model`.
+    """
     process = provider.get_process(process_name)
 
     if auto_fix:
@@ -113,7 +124,7 @@ def lint_process(
             provider.save_process(process)
             process = provider.get_process(process_name)
 
-    return {process_name: lint_process_model(process, linter)}
+    return {process_name: lint_process_model(process, linter, source_path)}
 
 
 def lint_all(

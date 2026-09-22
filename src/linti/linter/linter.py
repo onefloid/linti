@@ -68,7 +68,14 @@ class Linter:
             for stmt_type in rule.interested_in():
                 self.statement_registry.setdefault(stmt_type, []).append(rule)
 
-    def lint(self, tokens, context: LintContext = None, ast=None, source=None):
+    def lint(
+        self,
+        tokens,
+        context: LintContext = None,
+        ast=None,
+        source=None,
+        warn_deprecated_noqa: bool = True,
+    ):
         """
         Run all linting rules on the given tokens.
 
@@ -80,6 +87,9 @@ class Linter:
             source: Optional raw source text.  Lets statement rules slice the
                  exact span of an auto-fix; without it such rules degrade to
                  reporting only.
+            warn_deprecated_noqa: Warn about deprecated rule IDs in ``# noqa``
+                 comments, once per use.  The auto-fix passes turn this off so
+                 each use is reported once, at its final position.
 
         Returns:
             List of issues found (LintIssue objects and error messages).
@@ -133,7 +143,12 @@ class Linter:
         issues.extend(self._visit_node(ast, context))
 
         # Apply noqa suppressions
-        directives = parse_noqa(tokens)
+        directives = parse_noqa(
+            tokens,
+            source_path=context.source_path,
+            line_offset=context.block_start_line or 1,
+            warn_deprecated=warn_deprecated_noqa,
+        )
         issues = filter_issues(issues, directives)
 
         return issues

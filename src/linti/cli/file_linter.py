@@ -177,7 +177,13 @@ def lint_process_file(
 
     _print_debug(process, show_tokens, show_ast)
 
-    issue_map = lint_process(provider, process_name, linter, auto_fix=auto_fix)
+    issue_map = lint_process(
+        provider,
+        process_name,
+        linter,
+        auto_fix=auto_fix,
+        source_path=str(report_path),
+    )
     issues = issue_map[process_name]
 
     if return_issues:

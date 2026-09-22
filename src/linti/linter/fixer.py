@@ -90,7 +90,8 @@ def collect_fixable_issues(
 ) -> list[LintIssue]:
     """Lint code and return only the fixable issues."""
     tokens = Lexer(code).tokenize()
-    issues = linter.lint(tokens, lint_context, source=code)
+    # Deprecated noqa IDs are reported by the final lint, not per fix pass.
+    issues = linter.lint(tokens, lint_context, source=code, warn_deprecated_noqa=False)
     return [issue for issue in issues if issue.fix is not None]
 
 

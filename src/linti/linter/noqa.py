@@ -29,6 +29,7 @@ Supported formats (TI uses ``#`` for comments):
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from linti.lexer.token import Token, TokenType
@@ -40,17 +41,68 @@ _NOQA_BEGIN_RE = re.compile(r"#\s*noqa-begin\s*:\s*([A-Za-z0-9,\s]+)", re.IGNORE
 _NOQA_END_RE = re.compile(r"#\s*noqa-end\s*:\s*([A-Za-z0-9,\s]+)", re.IGNORECASE)
 
 
-def _parse_rule_ids(raw: str) -> set[str]:
+@dataclass(frozen=True)
+class _NoqaSource:
+    """Where the scanned tokens live, for locating deprecation warnings.
+
+    Attributes:
+        path: File the procedure was read from, or ``None`` when unknown
+            (e.g. linting a bare token stream).
+        line_offset: 1-based source line the procedure's code starts on, so
+            token lines map to lines in *path*.
+        warn: Whether deprecated IDs emit warnings at all. The auto-fix passes
+            turn this off: they lint code that is still changing, and the
+            final lint reports every use at its settled position.
+    """
+
+    path: str | None = None
+    line_offset: int = 1
+    warn: bool = True
+
+    def rule_ids(self, match: re.Match, token: Token) -> set[str]:
+        """Parse the rule IDs a noqa *match* in comment *token* lists."""
+        source_line = self.line_offset + token.line - 1
+
+        def locate(offset: int) -> str:
+            # Comments are single-line, so an ID's column is the comment's
+            # column plus the ID's offset within the comment text.
+            column = token.column + match.start(1) + offset
+            if self.path:
+                return f"{self.path}:{source_line}:{column}"
+            return f"line {source_line}, column {column}"
+
+        return _parse_rule_ids(match.group(1), locate, self.warn)
+
+
+def _parse_rule_ids(
+    raw: str,
+    locate: Callable[[int], str] | None = None,
+    warn: bool = True,
+) -> set[str]:
     """Parse comma-separated rule IDs into a canonical, upper-cased set.
 
     Deprecated rule IDs (e.g. ``S220``) are resolved to their canonical form
     (``C220``) so suppression matches the canonical ID diagnostics carry, and a
-    deprecation warning is emitted for each deprecated ID used.
+    deprecation warning is emitted for every deprecated ID used — once per
+    occurrence. *locate* maps an ID's offset within *raw* to its location
+    (``path:line:col``), which prefixes the warning so each spot to update can
+    be jumped to from the terminal. *warn* switches the warnings off.
     """
     # Imported lazily to avoid importing the whole rules package at module load.
-    from linti.rules.rule_ids import resolve_and_warn
+    from linti.rules.rule_ids import resolve_and_warn, resolve_rule_id
 
-    return {resolve_and_warn(r.strip()) for r in raw.split(",") if r.strip()}
+    ids: set[str] = set()
+    for id_match in re.finditer(r"[^,]+", raw):
+        rule_id = id_match.group().strip()
+        if not rule_id:
+            continue
+        if not warn:
+            ids.add(resolve_rule_id(rule_id)[0])
+            continue
+        offset = id_match.start() + id_match.group().index(rule_id)
+        location = locate(offset) if locate is not None else None
+        ids.add(resolve_and_warn(rule_id, location=location))
+    return ids
 
 
 def _is_standalone_comment(tokens: list[Token], comment_index: int) -> bool:
@@ -97,8 +149,18 @@ class NoqaDirectives:
         self.line_suppressions.setdefault(line, set()).update(rule_ids)
 
 
-def parse_noqa(tokens: list[Token]) -> NoqaDirectives:
+def parse_noqa(
+    tokens: list[Token],
+    *,
+    source_path: str | None = None,
+    line_offset: int = 1,
+    warn_deprecated: bool = True,
+) -> NoqaDirectives:
     """Scan *tokens* and build :class:`NoqaDirectives`.
+
+    *source_path* and *line_offset* (the source line the procedure starts on)
+    locate the deprecation warnings for deprecated rule IDs as
+    ``path:line:col``; *warn_deprecated* switches those warnings off.
 
     Algorithm:
     1. Walk through every ``COMMENT`` token.
@@ -113,6 +175,7 @@ def parse_noqa(tokens: list[Token]) -> NoqaDirectives:
        suppression covering **all** lines.
     """
     directives = NoqaDirectives()
+    source = _NoqaSource(source_path, line_offset, warn_deprecated)
 
     # Track open region suppressions: rule_id → start line (for validation)
     open_regions: dict[str, int] = {}
@@ -138,7 +201,7 @@ def parse_noqa(tokens: list[Token]) -> NoqaDirectives:
         # --- Region begin ---
         m_begin = _NOQA_BEGIN_RE.search(comment_text)
         if m_begin:
-            rule_ids = _parse_rule_ids(m_begin.group(1))
+            rule_ids = source.rule_ids(m_begin, token)
             for rid in rule_ids:
                 open_regions[rid] = token.line
             continue
@@ -146,7 +209,7 @@ def parse_noqa(tokens: list[Token]) -> NoqaDirectives:
         # --- Region end ---
         m_end = _NOQA_END_RE.search(comment_text)
         if m_end:
-            rule_ids = _parse_rule_ids(m_end.group(1))
+            rule_ids = source.rule_ids(m_end, token)
             for rid in rule_ids:
                 start_line = open_regions.pop(rid, None)
                 if start_line is not None:
@@ -160,7 +223,7 @@ def parse_noqa(tokens: list[Token]) -> NoqaDirectives:
         # --- Plain noqa ---
         m_inline = _NOQA_INLINE_RE.search(comment_text)
         if m_inline:
-            rule_ids = _parse_rule_ids(m_inline.group(1))
+            rule_ids = source.rule_ids(m_inline, token)
             standalone = _is_standalone_comment(tokens, i)
 
             if standalone and not seen_code:
