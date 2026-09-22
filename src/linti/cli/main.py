@@ -257,6 +257,20 @@ def explain(
         list_rules(config)
 
 
+@app.command()
+def schema() -> None:
+    """
+    Print the JSON Schema for linti.yaml.
+
+    Point your editor at it for completion and validation, e.g.:
+
+        linti schema > linti.schema.json
+    """
+    from linti.config_schema import render_config_schema
+
+    typer.echo(render_config_schema(), nl=False)
+
+
 def _install_config_warning_handler() -> None:
     """Render linti config warnings cleanly instead of raw Python warnings.
 

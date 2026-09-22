@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=../linti.schema.json
 # linti configuration file
 #
 # This file is automatically discovered and loaded from the same directory

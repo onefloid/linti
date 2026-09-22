@@ -87,6 +87,29 @@ You can also specify a custom configuration file:
 linti process.ti --config custom-config.yaml
 ```
 
+### Editor Support (JSON Schema)
+
+linti ships a JSON Schema for `linti.yaml` ([`linti.schema.json`](linti.schema.json)).
+Editors with a YAML language server (VS Code with the Red Hat YAML extension,
+JetBrains IDEs, Neovim, ...) use it for completion, hover documentation and
+validation — a misspelt key, which linti itself silently ignores, is flagged
+right away. Add this comment as the first line of your `linti.yaml`:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/onefloid/linti/main/linti.schema.json
+```
+
+To pin the schema to the linti version you use, or to work offline, write it
+next to your config and reference the local file instead:
+
+```bash
+linti schema > linti.schema.json
+```
+
+```yaml
+# yaml-language-server: $schema=./linti.schema.json
+```
+
 ### Configuration Options
 
 A typical `linti.yaml` file looks like this:
