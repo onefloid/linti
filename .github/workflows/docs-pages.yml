@@ -48,13 +48,11 @@ jobs:
         working-directory: site
         run: npm run generate
       - name: Upload Pages artifact
-        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v4
         with:
           path: site/.output/public
 
   deploy:
-    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     permissions:
