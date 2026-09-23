@@ -264,7 +264,7 @@ def schema(
         "--modeline",
         help=(
             "Print only the linti.yaml comment that points editors at the "
-            "schema of the installed linti version."
+            "schema matching the installed linti version."
         ),
     ),
 ) -> None:
@@ -277,14 +277,9 @@ def schema(
         linti schema --modeline    # first line for linti.yaml
     """
     if modeline:
-        from linti.schema_reference import installed_version
         from linti.schema_reference import modeline as schema_modeline
 
-        current = installed_version()
-        if current is None:
-            typer.secho("Cannot determine the installed linti version.", err=True)
-            raise typer.Exit(1)
-        typer.echo(schema_modeline(current))
+        typer.echo(schema_modeline())
         return
 
     from linti.config_schema import render_config_schema

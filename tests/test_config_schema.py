@@ -10,11 +10,21 @@ import pytest
 import yaml
 
 from linti.config import Config, LintiConfigWarning
-from linti.config_schema import build_config_schema, render_config_schema
+from linti._schema_version import SCHEMA_VERSION
+from linti.config_schema import (
+    build_config_schema,
+    render_config_schema,
+    schema_fingerprint,
+)
 from linti.rules import _RULE_REGISTRY
 from linti.rules.rule_factory import create_rules
 from linti.rules.naming.naming_rule import VariablePrefixRule
-from linti.schema_reference import check_schema_reference, modeline, schema_url
+from linti.schema_reference import (
+    check_schema_reference,
+    modeline,
+    schema_url,
+    version_key,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -37,10 +47,32 @@ def _project_version() -> str:
 
 def test_committed_schema_is_up_to_date():
     committed = (REPO_ROOT / "linti.schema.json").read_text()
-    assert committed == render_config_schema(_project_version()), (
+    assert committed == render_config_schema(), (
         "linti.schema.json is out of date. "
         "Run: python scripts/generate_config_schema.py"
     )
+
+
+def test_schema_version_is_not_ahead_of_the_project():
+    assert version_key(SCHEMA_VERSION) <= version_key(_project_version())
+
+
+def test_fingerprint_ignores_documentation_only():
+    schema = build_config_schema()
+    reworded = json.loads(json.dumps(schema))
+    reworded["$id"] = schema_url("9.9.9")
+    reworded["description"] = "Reworded."
+    reworded["$defs"]["IndentationConfig"]["properties"]["size"]["description"] = "x"
+    assert schema_fingerprint(reworded) == schema_fingerprint(schema)
+
+    changed = json.loads(json.dumps(schema))
+    changed["$defs"]["IndentationConfig"]["properties"]["size"]["default"] = 2
+    assert schema_fingerprint(changed) != schema_fingerprint(schema)
+
+    renamed = json.loads(json.dumps(schema))
+    props = renamed["$defs"]["IndentationConfig"]["properties"]
+    props["width"] = props.pop("size")
+    assert schema_fingerprint(renamed) != schema_fingerprint(schema)
 
 
 def test_every_registered_rule_has_a_schema_entry():
@@ -110,7 +142,7 @@ def test_schema_id_points_at_the_release_tag():
 # --- upgrade check for the schema a linti.yaml references --------------------
 
 
-def test_stale_url_reference_warns_with_current_modeline(tmp_path):
+def test_reference_older_than_the_last_config_change_warns(tmp_path):
     text = f"{modeline('0.7.0')}\nrules: {{}}\n"
     message = check_schema_reference(text, tmp_path / "linti.yaml", "0.8.0")
     assert message is not None
@@ -123,13 +155,15 @@ def test_stale_url_reference_warns_with_current_modeline(tmp_path):
     [
         "rules: {}\n",
         f"{modeline('0.8.0')}\n",
+        # Pinned to a later release whose config did not change since 0.8.0.
+        f"{modeline('0.8.3')}\n",
         "# yaml-language-server: $schema="
         "https://raw.githubusercontent.com/onefloid/linti/main/linti.schema.json\n",
         "# yaml-language-server: $schema=https://example.com/other.json\n",
         "# yaml-language-server: $schema=./missing.schema.json\n",
     ],
 )
-def test_current_or_unpinned_reference_does_not_warn(tmp_path, text):
+def test_reference_with_an_unchanged_config_does_not_warn(tmp_path, text):
     assert check_schema_reference(text, tmp_path / "linti.yaml", "0.8.0") is None
 
 
@@ -143,15 +177,23 @@ def test_stale_local_schema_file_warns(tmp_path):
     assert "linti 0.7.0" in check_schema_reference(text, config, "0.8.0")
 
 
-def test_loading_a_config_with_a_stale_reference_warns(tmp_path, monkeypatch):
-    monkeypatch.setattr("linti.schema_reference.installed_version", lambda: "99.0.0")
-    config = tmp_path / "linti.yaml"
-    config.write_text(f"{modeline('0.7.0')}\nfail_on: error\n")
+def _config_warnings(config: Path) -> list[str]:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         Config.load_from_file(config)
-    messages = [
+    return [
         str(w.message) for w in caught if issubclass(w.category, LintiConfigWarning)
     ]
-    assert len(messages) == 1
-    assert schema_url("99.0.0") in messages[0]
+
+
+def test_loading_a_config_with_a_stale_reference_warns(tmp_path):
+    config = tmp_path / "linti.yaml"
+    config.write_text(f"{modeline('0.0.1')}\nfail_on: error\n")
+    (message,) = _config_warnings(config)
+    assert schema_url() in message
+
+
+def test_loading_a_config_with_the_current_reference_is_silent(tmp_path):
+    config = tmp_path / "linti.yaml"
+    config.write_text(f"{modeline()}\nfail_on: error\n")
+    assert _config_warnings(config) == []

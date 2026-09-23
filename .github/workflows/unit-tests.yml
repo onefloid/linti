@@ -21,15 +21,16 @@ jobs:
         with:
           python-version: ${{ inputs.python-version }}
 
-      - name: Check config JSON Schema is up to date
-        run: |
-          pip install -e .
-          python scripts/generate_config_schema.py --check
+      - name: Install dependencies
+        run: pip install -e .[dev]
+
+      # Stale schema, or a config change on a version that is already
+      # released (its tag would keep serving the old schema).
+      - name: Check config JSON Schema
+        run: python scripts/generate_config_schema.py --check --verify-tag
 
       - name: Run unit tests
-        run: |
-          pip install -e .[dev]
-          pytest tests/ -v
+        run: pytest tests/ -v
 
       - name: Validation Summary
         if: success()

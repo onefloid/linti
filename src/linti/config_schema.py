@@ -8,19 +8,21 @@ dedicated config class) and its metadata supplies the per-rule descriptions.
 Editors use it for completion and validation, e.g. through the YAML language
 server comment ``# yaml-language-server: $schema=<url>`` in ``linti.yaml``.
 The committed copy (``linti.schema.json`` at the repository root) is refreshed
-with ``python scripts/generate_config_schema.py``; its ``$id`` names the release
-tag it ships with, so each tag serves the schema of its own version.
+with ``python scripts/generate_config_schema.py``. Its ``$id`` names the release
+tag of :data:`~linti.schema_reference.SCHEMA_VERSION`, the release in which the
+config last changed, so that URL keeps serving exactly this schema.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Any, Optional
 
 from linti.config import _REMOVED_RULE_CONFIGS, Config, RuleConfig
 from linti.rules import _RULE_REGISTRY
 from linti.rules.rule_ids import rule_instances, synthetic_rules
-from linti.schema_reference import SCHEMA_URL_TEMPLATE, installed_version, schema_url
+from linti.schema_reference import SCHEMA_VERSION, schema_url
 
 SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 
@@ -48,18 +50,13 @@ def _rule_descriptions() -> dict[str, str]:
     return {key: "\n".join(sorted(texts)) for key, texts in lines.items()}
 
 
-def build_config_schema(linti_version: Optional[str] = None) -> dict[str, Any]:
+def build_config_schema(schema_version: Optional[str] = None) -> dict[str, Any]:
     """Return the JSON Schema describing a ``linti.yaml`` file.
 
-    *linti_version* (default: the installed one) only decides the ``$id``, the
-    URL under which that version's release tag serves the schema.
+    *schema_version* (default: :data:`SCHEMA_VERSION`) only decides the
+    ``$id``, the URL under which that version's release tag serves the schema.
     """
-    linti_version = linti_version or installed_version()
-    schema_id = (
-        schema_url(linti_version)
-        if linti_version
-        else SCHEMA_URL_TEMPLATE.format(ref="main")
-    )
+    schema_id = schema_url(schema_version or SCHEMA_VERSION)
     schema = Config.model_json_schema(by_alias=True)
     defs = schema["$defs"]
 
@@ -112,10 +109,39 @@ def build_config_schema(linti_version: Optional[str] = None) -> dict[str, Any]:
     }
 
 
-def render_config_schema(linti_version: Optional[str] = None) -> str:
+def render_config_schema(schema_version: Optional[str] = None) -> str:
     """The schema as the JSON text that is committed and printed by the CLI."""
-    schema = build_config_schema(linti_version)
+    schema = build_config_schema(schema_version)
     return json.dumps(schema, indent=2, ensure_ascii=False) + "\n"
+
+
+#: Keys that only document the schema. Changing them is no config change, so
+#: they are left out of :func:`schema_fingerprint`.
+_ANNOTATION_KEYS = frozenset({"$id", "title", "description"})
+
+
+def schema_fingerprint(schema: Any) -> str:
+    """A stable digest of what a schema accepts, ignoring its documentation.
+
+    Two schemas with the same fingerprint describe the same config, so the
+    schema version (and the URL users pin) only moves when this changes.
+    Property *names* are kept, even ``title`` or ``description`` ones: only
+    annotation keywords of a schema object are dropped.
+    """
+
+    def strip(node: Any, is_property_map: bool = False) -> Any:
+        if isinstance(node, dict):
+            return {
+                key: strip(value, is_property_map=key in ("properties", "$defs"))
+                for key, value in node.items()
+                if is_property_map or key not in _ANNOTATION_KEYS
+            }
+        if isinstance(node, list):
+            return [strip(item) for item in node]
+        return node
+
+    canonical = json.dumps(strip(schema), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _all_subclasses(cls: type) -> list[type]:

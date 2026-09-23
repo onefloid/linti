@@ -95,9 +95,9 @@ JetBrains IDEs, Neovim, ...) use it for completion, hover documentation and
 validation — a misspelt key, which linti itself silently ignores, is flagged
 right away.
 
-Every release tag carries the schema of its own version, so pin the one that
-matches your installed linti. `linti schema --modeline` prints the line to put
-at the top of your `linti.yaml`, e.g.:
+The schema is versioned by the release in which the config last changed, and
+that release tag serves it. `linti schema --modeline` prints the line to put at
+the top of your `linti.yaml`, e.g.:
 
 ```yaml
 # yaml-language-server: $schema=https://raw.githubusercontent.com/onefloid/linti/v0.8.0/linti.schema.json
@@ -114,11 +114,12 @@ linti schema > linti.schema.json
 # yaml-language-server: $schema=./linti.schema.json
 ```
 
-**After upgrading linti**, the pinned schema is out of date. linti notices
-this when it loads the config — for a release-tag URL as well as for a local
-file written by `linti schema` — and prints a warning with the line to use
-instead (or regenerate the local copy). Referencing `main` instead of a tag
-always follows the latest development state and is never reported.
+**After upgrading linti** you only need to touch this line when the config
+changed in the meantime. linti checks it when it loads the config — for a
+release-tag URL as well as for a local file written by `linti schema` — and
+warns with the line to use instead only if your pin is older than the last
+config change. Upgrades without config changes stay silent. Referencing `main`
+instead of a tag follows the latest development state and is never reported.
 
 ### Configuration Options
 

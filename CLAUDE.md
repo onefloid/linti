@@ -27,12 +27,17 @@ and `PYTHONPATH=src pytest`.
 - After adding a rule or changing rule metadata, regenerate docs with
   `python scripts/generate_all_rules.py`. **Never edit `ALL_RULES.md` by hand** —
   it is generated from each rule's `METADATA`.
-- After changing `config.py` (settings, defaults, descriptions), adding a
-  rule, or bumping the version in `pyproject.toml`, regenerate the config JSON
-  Schema with `python scripts/generate_config_schema.py`. **Never edit
-  `linti.schema.json` by hand.** Its `$id` names the release tag
-  (`v<version>`), so every tag serves the schema of its own version; CI runs
-  `--check` and `tests/test_config_schema.py` fails when it is stale.
+- After changing `config.py` (settings, defaults, descriptions) or adding a
+  rule, regenerate the config JSON Schema with
+  `python scripts/generate_config_schema.py`. **Never edit `linti.schema.json`
+  or `src/linti/_schema_version.py` by hand.** The schema has its own version
+  (`SCHEMA_VERSION`): the release in which the config structure last changed.
+  Its `$id` points at that release tag (`v<version>`), so users are only asked
+  to update their pinned schema when the config really changed. The generator
+  keeps the version for description-only edits; on a structural change it
+  takes the version from `pyproject.toml` — bump that first if it is already
+  released. CI runs `--check --verify-tag`, which fails on a stale schema or on
+  a change to an already-released schema version.
 - Run the full test suite after changes.
 - Update `README.md` when behavior changes, and suggest a `pyproject.toml`
   version bump after a feature or fix.
