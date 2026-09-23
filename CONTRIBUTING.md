@@ -37,6 +37,8 @@ For larger changes — new features, architectural changes, or significant refac
 - Use `ruff` for linting: `ruff check src/`
 - After adding or modifying a rule, regenerate `ALL_RULES.md`: `python scripts/generate_all_rules.py`
 - Do not edit `ALL_RULES.md` directly.
+- After changing `src/linti/config.py` (settings, defaults, descriptions), adding a rule, or bumping the version in `pyproject.toml`, regenerate `linti.schema.json`: `python scripts/generate_config_schema.py`.
+- Do not edit `linti.schema.json` directly. CI fails when it is out of date.
 
 ## License
 

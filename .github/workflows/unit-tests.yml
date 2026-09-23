@@ -21,6 +21,11 @@ jobs:
         with:
           python-version: ${{ inputs.python-version }}
 
+      - name: Check config JSON Schema is up to date
+        run: |
+          pip install -e .
+          python scripts/generate_config_schema.py --check
+
       - name: Run unit tests
         run: |
           pip install -e .[dev]

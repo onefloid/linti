@@ -8,6 +8,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from linti.linter.lint_issue import Severity
+from linti.schema_reference import check_schema_reference
 
 
 class LintiConfigWarning(UserWarning):
@@ -653,8 +654,12 @@ class Config(BaseModel):
         if not config_path.exists():
             raise FileNotFoundError(f"Config file not found: {config_path}")
 
-        with open(config_path, "r") as f:
-            config_dict = yaml.safe_load(f) or {}
+        config_text = config_path.read_text()
+        config_dict = yaml.safe_load(config_text) or {}
+
+        schema_warning = check_schema_reference(config_text, config_path)
+        if schema_warning:
+            warnings.warn(schema_warning, LintiConfigWarning, stacklevel=2)
 
         cls._warn_about_removed_rule_configs(config_dict, config_path)
         cls._warn_about_moved_rule_configs(config_dict, config_path)

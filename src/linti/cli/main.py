@@ -258,14 +258,35 @@ def explain(
 
 
 @app.command()
-def schema() -> None:
+def schema(
+    modeline: bool = typer.Option(
+        False,
+        "--modeline",
+        help=(
+            "Print only the linti.yaml comment that points editors at the "
+            "schema of the installed linti version."
+        ),
+    ),
+) -> None:
     """
     Print the JSON Schema for linti.yaml.
 
     Point your editor at it for completion and validation, e.g.:
 
         linti schema > linti.schema.json
+        linti schema --modeline    # first line for linti.yaml
     """
+    if modeline:
+        from linti.schema_reference import installed_version
+        from linti.schema_reference import modeline as schema_modeline
+
+        current = installed_version()
+        if current is None:
+            typer.secho("Cannot determine the installed linti version.", err=True)
+            raise typer.Exit(1)
+        typer.echo(schema_modeline(current))
+        return
+
     from linti.config_schema import render_config_schema
 
     typer.echo(render_config_schema(), nl=False)

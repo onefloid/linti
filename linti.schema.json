@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/onefloid/linti/main/linti.schema.json",
+  "$id": "https://raw.githubusercontent.com/onefloid/linti/v0.7.0/linti.schema.json",
   "title": "linti configuration",
   "description": "Configuration file (linti.yaml) for linti, the TM1 TurboIntegrator linter.",
   "type": "object",

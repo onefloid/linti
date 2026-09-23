@@ -93,14 +93,18 @@ linti ships a JSON Schema for `linti.yaml` ([`linti.schema.json`](linti.schema.j
 Editors with a YAML language server (VS Code with the Red Hat YAML extension,
 JetBrains IDEs, Neovim, ...) use it for completion, hover documentation and
 validation — a misspelt key, which linti itself silently ignores, is flagged
-right away. Add this comment as the first line of your `linti.yaml`:
+right away.
+
+Every release tag carries the schema of its own version, so pin the one that
+matches your installed linti. `linti schema --modeline` prints the line to put
+at the top of your `linti.yaml`, e.g.:
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/onefloid/linti/main/linti.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/onefloid/linti/v0.8.0/linti.schema.json
 ```
 
-To pin the schema to the linti version you use, or to work offline, write it
-next to your config and reference the local file instead:
+To work offline, write the schema next to your config and reference the local
+file instead:
 
 ```bash
 linti schema > linti.schema.json
@@ -109,6 +113,12 @@ linti schema > linti.schema.json
 ```yaml
 # yaml-language-server: $schema=./linti.schema.json
 ```
+
+**After upgrading linti**, the pinned schema is out of date. linti notices
+this when it loads the config — for a release-tag URL as well as for a local
+file written by `linti schema` — and prints a warning with the line to use
+instead (or regenerate the local copy). Referencing `main` instead of a tag
+always follows the latest development state and is never reported.
 
 ### Configuration Options
 

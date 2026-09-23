@@ -27,10 +27,12 @@ and `PYTHONPATH=src pytest`.
 - After adding a rule or changing rule metadata, regenerate docs with
   `python scripts/generate_all_rules.py`. **Never edit `ALL_RULES.md` by hand** —
   it is generated from each rule's `METADATA`.
-- After changing `config.py` (settings, defaults, descriptions) or adding a
-  rule, regenerate the config JSON Schema with
-  `python scripts/generate_config_schema.py`. **Never edit `linti.schema.json`
-  by hand** — `tests/test_config_schema.py` fails when it is stale.
+- After changing `config.py` (settings, defaults, descriptions), adding a
+  rule, or bumping the version in `pyproject.toml`, regenerate the config JSON
+  Schema with `python scripts/generate_config_schema.py`. **Never edit
+  `linti.schema.json` by hand.** Its `$id` names the release tag
+  (`v<version>`), so every tag serves the schema of its own version; CI runs
+  `--check` and `tests/test_config_schema.py` fails when it is stale.
 - Run the full test suite after changes.
 - Update `README.md` when behavior changes, and suggest a `pyproject.toml`
   version bump after a feature or fix.

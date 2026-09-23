@@ -8,20 +8,21 @@ dedicated config class) and its metadata supplies the per-rule descriptions.
 Editors use it for completion and validation, e.g. through the YAML language
 server comment ``# yaml-language-server: $schema=<url>`` in ``linti.yaml``.
 The committed copy (``linti.schema.json`` at the repository root) is refreshed
-with ``python scripts/generate_config_schema.py``.
+with ``python scripts/generate_config_schema.py``; its ``$id`` names the release
+tag it ships with, so each tag serves the schema of its own version.
 """
 
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Optional
 
 from linti.config import _REMOVED_RULE_CONFIGS, Config, RuleConfig
 from linti.rules import _RULE_REGISTRY
 from linti.rules.rule_ids import rule_instances, synthetic_rules
+from linti.schema_reference import SCHEMA_URL_TEMPLATE, installed_version, schema_url
 
 SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
-SCHEMA_ID = "https://raw.githubusercontent.com/onefloid/linti/main/linti.schema.json"
 
 
 def _rule_descriptions() -> dict[str, str]:
@@ -47,8 +48,18 @@ def _rule_descriptions() -> dict[str, str]:
     return {key: "\n".join(sorted(texts)) for key, texts in lines.items()}
 
 
-def build_config_schema() -> dict[str, Any]:
-    """Return the JSON Schema describing a ``linti.yaml`` file."""
+def build_config_schema(linti_version: Optional[str] = None) -> dict[str, Any]:
+    """Return the JSON Schema describing a ``linti.yaml`` file.
+
+    *linti_version* (default: the installed one) only decides the ``$id``, the
+    URL under which that version's release tag serves the schema.
+    """
+    linti_version = linti_version or installed_version()
+    schema_id = (
+        schema_url(linti_version)
+        if linti_version
+        else SCHEMA_URL_TEMPLATE.format(ref="main")
+    )
     schema = Config.model_json_schema(by_alias=True)
     defs = schema["$defs"]
 
@@ -89,7 +100,7 @@ def build_config_schema() -> dict[str, Any]:
 
     return {
         "$schema": SCHEMA_DIALECT,
-        "$id": SCHEMA_ID,
+        "$id": schema_id,
         "title": "linti configuration",
         "description": (
             "Configuration file (linti.yaml) for linti, the TM1 TurboIntegrator linter."
@@ -101,9 +112,10 @@ def build_config_schema() -> dict[str, Any]:
     }
 
 
-def render_config_schema() -> str:
+def render_config_schema(linti_version: Optional[str] = None) -> str:
     """The schema as the JSON text that is committed and printed by the CLI."""
-    return json.dumps(build_config_schema(), indent=2, ensure_ascii=False) + "\n"
+    schema = build_config_schema(linti_version)
+    return json.dumps(schema, indent=2, ensure_ascii=False) + "\n"
 
 
 def _all_subclasses(cls: type) -> list[type]:
