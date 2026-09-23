@@ -1,0 +1,14 @@
+{
+  "name": "linti-docs",
+  "private": true,
+  "scripts": {
+    "dev": "nuxt dev",
+    "generate": "nuxt generate"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "docus": "5.13.0",
+    "nuxt": "4.5.2",
+    "pyodide": "0.29.3"
+  }
+}
