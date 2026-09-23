@@ -1,9 +1,21 @@
 """The website must describe the same rules as the Python registry."""
 
+import importlib.util
 import json
+from pathlib import Path
 
-from scripts.export_rule_reference import OUTPUT, collect_rules, render_json
 from linti.rules.rule_ids import rule_metadata_index
+
+
+SCRIPT = Path(__file__).parents[1] / "scripts" / "export_rule_reference.py"
+SPEC = importlib.util.spec_from_file_location("export_rule_reference", SCRIPT)
+assert SPEC and SPEC.loader
+export_rule_reference = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(export_rule_reference)
+
+OUTPUT = export_rule_reference.OUTPUT
+collect_rules = export_rule_reference.collect_rules
+render_json = export_rule_reference.render_json
 
 
 def test_export_includes_each_canonical_rule_once():
