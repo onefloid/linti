@@ -977,17 +977,17 @@
     ],
     "examples": [
       {
-        "code": "# Data block, ODBC query: SELECT ... FROM t\nIF(vRegion @= 'EMEA');\n  CellPutN(vAmount, 'Sales', vRegion, vMonth);\nENDIF;",
+        "code": "IF(vRegion @= 'EMEA');\n  CellPutN(vAmount, 'Sales', vRegion, vMonth);\nENDIF;",
         "description": "all writes conditional, no WHERE — filter in SQL",
         "valid": false
       },
       {
-        "code": "# Data block, ODBC query: SELECT ... FROM t\nIF(vRegion @= 'EMEA');\n  ItemSkip();\nENDIF;",
+        "code": "IF(vRegion @= 'EMEA');\n  ItemSkip();\nENDIF;",
         "description": "ItemSkip() filters rows, no WHERE — filter in SQL",
         "valid": false
       },
       {
-        "code": "# Data block, ODBC query: SELECT ... FROM t WHERE region = ?\nCellPutN(vAmount, 'Sales', vRegion, vMonth);",
+        "code": "CellPutN(vAmount, 'Sales', vRegion, vMonth);",
         "description": "filtering done in SQL WHERE clause",
         "valid": true
       }
