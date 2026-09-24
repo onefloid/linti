@@ -113,6 +113,7 @@ class VariablePrefixConfig(RuleConfig):
     """Configuration for VariablePrefixRule."""
 
     allow_constant_prefix: bool = False
+    allow_loop_counter_variables: bool = False
 
 
 class ConditionalControlFlowConfig(RuleConfig):
