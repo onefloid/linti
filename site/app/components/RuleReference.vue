@@ -26,15 +26,27 @@ const route = useRoute()
 const router = useRouter()
 const config = useRuntimeConfig()
 const query = ref('')
+const groups = [...new Set(allRules.map(rule => rule.group))]
 const group = ref('all')
-const selectedId = ref(String(route.query.rule || 'C150').toUpperCase())
+const groupItems = [
+  { label: 'All categories', value: 'all' },
+  ...groups.map(letter => ({ label: `${letter} · ${allRules.find(rule => rule.group === letter)?.group_name}`, value: letter })),
+]
+const procedureItems = [
+  { label: 'Prolog', value: 'prolog' },
+  { label: 'Metadata', value: 'metadata' },
+  { label: 'Data', value: 'data' },
+  { label: 'Epilog', value: 'epilog' },
+]
+// 16px text on phones keeps iOS Safari from zooming in when a field gets focus.
+const fieldUi = { base: 'text-base sm:text-sm' }
+const selectedId = ref('C150')
 const selected = computed(() => allRules.find(rule => rule.id === selectedId.value) || allRules[0]!)
 const code = ref('')
 const procedure = ref('prolog')
 const busy = ref(false)
 const error = ref('')
 const result = ref<Result | null>(null)
-const groups = [...new Set(allRules.map(rule => rule.group))]
 const filtered = computed(() => allRules.filter((rule) => {
   if (group.value !== 'all' && rule.group !== group.value) return false
   const text = `${rule.id} ${rule.name} ${rule.description} ${rule.explanation}`.toLowerCase()
@@ -57,11 +69,20 @@ function selectRule(rule: Rule) {
 }
 
 watch(selected, rule => chooseExample(rule.examples.find(example => !example.valid) || rule.examples[0]), { immediate: true })
-watch(() => route.query.rule, (id) => {
-  if (typeof id === 'string' && allRules.some(rule => rule.id === id.toUpperCase())) {
-    selectedId.value = id.toUpperCase()
+// The page is prerendered without a query string, so URL state is applied only
+// after hydration to keep the server and client markup identical.
+function applyQuery() {
+  const letter = String(route.query.group || '').toUpperCase()
+  if (groups.includes(letter)) {
+    group.value = letter
+    if (selected.value.group !== letter) selectedId.value = allRules.find(rule => rule.group === letter)!.id
   }
-})
+  const id = String(route.query.rule || '').toUpperCase()
+  if (allRules.some(rule => rule.id === id)) selectedId.value = id
+}
+
+onMounted(applyQuery)
+watch(() => [route.query.rule, route.query.group], applyQuery)
 
 function run(fix = false) {
   if (busy.value || !import.meta.client) return
@@ -94,14 +115,9 @@ onBeforeUnmount(() => worker?.terminate())
   <div class="reference">
     <div class="reference-sidebar">
       <label class="field-label" for="rule-search">Find a rule</label>
-      <input id="rule-search" v-model="query" class="field" type="search" placeholder="ID, name, description…">
+      <UInput id="rule-search" v-model="query" type="search" icon="i-lucide-search" size="lg" placeholder="ID, name, description…" class="w-full" :ui="fieldUi" />
       <label class="field-label" for="rule-group">Category</label>
-      <select id="rule-group" v-model="group" class="field">
-        <option value="all">All categories</option>
-        <option v-for="letter in groups" :key="letter" :value="letter">
-          {{ letter }} · {{ allRules.find(rule => rule.group === letter)?.group_name }}
-        </option>
-      </select>
+      <USelect id="rule-group" v-model="group" :items="groupItems" icon="i-lucide-list-filter" size="lg" class="w-full" :ui="fieldUi" />
       <p class="rule-count">{{ filtered.length }} of {{ allRules.length }} rules</p>
       <div class="rule-list" role="list" aria-label="LinTi rules">
         <button
@@ -137,22 +153,26 @@ onBeforeUnmount(() => worker?.terminate())
         <h3>Try {{ selected.id }}</h3>
         <p>Edit an example and run the real Python rule in your browser. The first run loads Pyodide; subsequent runs reuse it.</p>
         <div v-if="selected.examples.length" class="example-actions">
-          <button v-for="(example, index) in selected.examples" :key="index" class="example-button" @click="chooseExample(example)">
+          <UButton
+            v-for="(example, index) in selected.examples"
+            :key="index"
+            :icon="example.valid ? 'i-lucide-circle-check' : 'i-lucide-circle-x'"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            class="example-button"
+            @click="chooseExample(example)"
+          >
             {{ example.description || (example.valid ? 'Valid example' : 'Invalid example') }}
-          </button>
+          </UButton>
         </div>
         <label class="field-label" for="procedure">TI procedure</label>
-        <select id="procedure" v-model="procedure" class="field procedure-field">
-          <option value="prolog">Prolog</option>
-          <option value="metadata">Metadata</option>
-          <option value="data">Data</option>
-          <option value="epilog">Epilog</option>
-        </select>
+        <USelect id="procedure" v-model="procedure" :items="procedureItems" size="lg" class="w-44 max-w-full" :ui="fieldUi" />
         <label class="field-label" for="ti-code">TI code</label>
         <textarea id="ti-code" v-model="code" class="code-editor" spellcheck="false" rows="10" aria-label="TI code" />
         <div class="run-actions">
-          <button class="run-button" :disabled="busy" @click="run()">{{ busy ? 'Loading LinTi / checking…' : `Run ${selected.id}` }}</button>
-          <button v-if="selected.auto_fix" class="fix-button" :disabled="busy" @click="run(true)">Apply auto-fix</button>
+          <UButton icon="i-lucide-play" :loading="busy" @click="run()">{{ busy ? 'Loading LinTi / checking…' : `Run ${selected.id}` }}</UButton>
+          <UButton v-if="selected.auto_fix" icon="i-lucide-wand-sparkles" color="neutral" variant="outline" :disabled="busy" @click="run(true)">Apply auto-fix</UButton>
         </div>
         <p v-if="error" role="alert" class="error">{{ error }}</p>
         <div v-if="result" class="findings" aria-live="polite">
@@ -178,8 +198,8 @@ onBeforeUnmount(() => worker?.terminate())
 .reference { display: grid; grid-template-columns: minmax(14rem, 19rem) minmax(0, 1fr); gap: 2rem; margin-top: 2rem; align-items: start; }
 .reference-sidebar { position: sticky; top: 1.5rem; max-height: calc(100vh - 3rem); display: flex; flex-direction: column; min-width: 0; }
 .field-label { display: block; margin: .7rem 0 .35rem; font-size: .85rem; font-weight: 650; }
-.field { width: 100%; border: 1px solid var(--ui-border); border-radius: .45rem; padding: .55rem .7rem; color: var(--ui-text); background: var(--ui-bg); }
 .rule-count, .muted { color: var(--ui-text-muted); font-size: .85rem; }
+.rule-count { margin: .5rem 0; }
 .rule-list { overflow-y: auto; border: 1px solid var(--ui-border); border-radius: .5rem; }
 .rule-choice { display: block; width: 100%; padding: .7rem .8rem; text-align: left; border-bottom: 1px solid var(--ui-border); }
 .rule-choice:hover, .rule-choice.active { background: var(--ui-bg-elevated); }
@@ -198,13 +218,10 @@ onBeforeUnmount(() => worker?.terminate())
 .playground h3, .configuration h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: .3rem; }
 .playground p { font-size: .9rem; }
 .example-actions { margin: 1rem 0; }
-.example-button, .fix-button { padding: .4rem .65rem; border: 1px solid var(--ui-border); border-radius: .4rem; font-size: .82rem; }
-.example-button:hover, .fix-button:hover { border-color: var(--ui-primary); }
-.procedure-field { max-width: 11rem; }
-.code-editor { width: 100%; resize: vertical; padding: .8rem; border-radius: .45rem; border: 1px solid var(--ui-border); background: var(--ui-bg); color: var(--ui-text); font: .85rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; tab-size: 4; }
+.example-button { max-width: 100%; text-align: left; white-space: normal; }
+.code-editor { width: 100%; resize: vertical; padding: .8rem; border-radius: .45rem; border: 1px solid var(--ui-border-accented); background: var(--ui-bg); color: var(--ui-text); font: .85rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; tab-size: 4; }
+.code-editor:focus { outline: 2px solid var(--ui-primary); outline-offset: -1px; }
 .run-actions { margin-top: .8rem; }
-.run-button { padding: .48rem .9rem; border-radius: .4rem; background: var(--ui-primary); color: white; font-weight: 650; }
-.run-button:disabled, .fix-button:disabled { opacity: .6; cursor: wait; }
 .error { color: var(--ui-error); overflow-wrap: anywhere; }
 .success { color: var(--ui-success); }
 .findings { margin-top: 1rem; }
@@ -212,5 +229,12 @@ onBeforeUnmount(() => worker?.terminate())
 .configuration { margin-top: 1.8rem; }
 .configuration pre { padding: 1rem; overflow-x: auto; border-radius: .5rem; background: var(--ui-bg-elevated); }
 .empty { padding: .8rem; }
-@media (max-width: 760px) { .reference { grid-template-columns: 1fr; gap: 1.5rem; } .reference-sidebar { position: static; max-height: none; } .rule-list { max-height: 15rem; } }
+@media (max-width: 760px) {
+  .reference { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
+  .reference-sidebar { position: static; max-height: none; }
+  .rule-list { max-height: 15rem; }
+  .playground { padding: 1rem; }
+  /* 16px text on phones keeps iOS Safari from zooming in when the editor gets focus. */
+  .code-editor { font-size: 1rem; }
+}
 </style>
