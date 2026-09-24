@@ -42,3 +42,11 @@ def test_export_carries_example_context():
     placement = rules["C150"]["examples"]
     assert {example["procedure"] for example in placement} - {"prolog"}
     assert any(example["parameters"] for example in rules["C210"]["examples"])
+
+
+def test_default_config_reflects_config_defaults():
+    rules = {rule["id"]: rule for rule in collect_rules()}
+    # The hand-written config_example turns this option on; the default is off.
+    assert "allow_loop_counter_variables: false" in rules["N110"]["default_config"]
+    assert "enabled: false" in rules["C130"]["default_config"]
+    assert rules["X210"]["default_config"].startswith("rules:\n  sql_where_filtering:\n    enabled: true")

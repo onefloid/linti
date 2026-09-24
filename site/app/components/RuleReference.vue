@@ -24,6 +24,7 @@ type Rule = {
   enabled_by_default: boolean
   config_key: string
   config_example: string
+  default_config: string
   deprecated_by: string | null
   previous_ids: string[]
   examples: Example[]
@@ -60,13 +61,27 @@ const variables = ref('')
 const datasourceType = ref('')
 const datasourceQuery = ref('')
 const splitNames = (text: string) => text.split(/[\s,]+/).filter(Boolean)
-const contextOpen = ref(false)
-const contextSummary = computed(() => [
-  lintiYaml.value.trim() && 'custom config',
-  splitNames(parameters.value).length && 'parameters',
-  splitNames(variables.value).length && 'variables',
-  datasourceType.value.trim() && `${datasourceType.value.trim()} data source`,
-].filter(Boolean).join(', '))
+// Only the context an example actually uses is shown; the rest can be added.
+type ContextField = 'config' | 'parameters' | 'variables' | 'datasource'
+const contextLabels: Record<ContextField, string> = {
+  config: 'linti.yaml',
+  parameters: 'Parameters',
+  variables: 'Variables',
+  datasource: 'Data source',
+}
+const shownContext = ref<ContextField[]>([])
+const hiddenContext = computed(() => (Object.keys(contextLabels) as ContextField[]).filter(field => !shownContext.value.includes(field)))
+function addContext(field: ContextField) {
+  shownContext.value = [...shownContext.value, field]
+  if (field === 'config' && !lintiYaml.value.trim()) lintiYaml.value = selected.value.default_config
+}
+function removeContext(field: ContextField) {
+  shownContext.value = shownContext.value.filter(item => item !== field)
+  if (field === 'config') lintiYaml.value = ''
+  if (field === 'parameters') parameters.value = ''
+  if (field === 'variables') variables.value = ''
+  if (field === 'datasource') datasourceType.value = datasourceQuery.value = ''
+}
 const busy = ref(false)
 const error = ref('')
 const result = ref<Result | null>(null)
@@ -87,8 +102,12 @@ function chooseExample(example?: Example) {
   variables.value = example?.variables.join(', ') || ''
   datasourceType.value = example?.datasource_type || ''
   datasourceQuery.value = example?.datasource_query || ''
-  // Show what the example depends on instead of hiding it in a closed panel.
-  contextOpen.value = Boolean(contextSummary.value)
+  shownContext.value = (Object.keys(contextLabels) as ContextField[]).filter(field => ({
+    config: lintiYaml.value,
+    parameters: parameters.value,
+    variables: variables.value,
+    datasource: datasourceType.value || datasourceQuery.value,
+  })[field])
   result.value = null
   error.value = ''
 }
@@ -208,48 +227,51 @@ onBeforeUnmount(() => worker?.terminate())
         <USelect id="procedure" v-model="procedure" :items="procedureItems" size="lg" class="w-44 max-w-full" :ui="fieldUi" />
         <label class="field-label" for="ti-code">TI code</label>
         <textarea id="ti-code" v-model="code" class="code-editor" spellcheck="false" rows="10" aria-label="TI code" />
-        <details class="context" :open="contextOpen" @toggle="contextOpen = ($event.target as HTMLDetailsElement).open">
-          <summary>Process context &amp; linti.yaml<span v-if="contextSummary" class="context-summary"> · {{ contextSummary }}</span></summary>
-          <div class="context-fields">
-            <div>
-              <label class="field-label" for="parameters">Process parameters</label>
-              <UInput id="parameters" v-model="parameters" placeholder="pYear, pVersion" class="w-full" :ui="fieldUi" />
+        <div v-if="shownContext.length" class="context">
+          <p class="context-title">Runs with</p>
+          <div v-for="field in shownContext" :key="field" class="context-field">
+            <div class="context-label">
+              <label class="field-label" :for="`context-${field}`">{{ contextLabels[field] }}</label>
+              <UButton
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                icon="i-lucide-x"
+                :aria-label="`Remove ${contextLabels[field]}`"
+                @click="removeContext(field)"
+              />
             </div>
-            <div>
-              <label class="field-label" for="variables">Data source variables</label>
-              <UInput id="variables" v-model="variables" placeholder="vRegion, vAmount" class="w-full" :ui="fieldUi" />
-            </div>
-            <div>
-              <label class="field-label" for="datasource-type">Data source type</label>
-              <UInput id="datasource-type" v-model="datasourceType" placeholder="ODBC, ASCII, VIEW…" class="w-full" :ui="fieldUi" />
-            </div>
-            <div>
-              <label class="field-label" for="datasource-query">Data source query</label>
-              <UInput id="datasource-query" v-model="datasourceQuery" placeholder="SELECT … FROM …" class="w-full" :ui="fieldUi" />
+            <textarea
+              v-if="field === 'config'"
+              id="context-config"
+              v-model="lintiYaml"
+              class="code-editor"
+              spellcheck="false"
+              wrap="off"
+              :rows="Math.max(3, lintiYaml.split('\n').length)"
+            />
+            <UInput v-else-if="field === 'parameters'" id="context-parameters" v-model="parameters" placeholder="pYear, pVersion" class="w-full" :ui="fieldUi" />
+            <UInput v-else-if="field === 'variables'" id="context-variables" v-model="variables" placeholder="vRegion, vAmount" class="w-full" :ui="fieldUi" />
+            <div v-else class="datasource-fields">
+              <UInput id="context-datasource" v-model="datasourceType" placeholder="ODBC" aria-label="Data source type" :ui="fieldUi" />
+              <UInput v-model="datasourceQuery" placeholder="SELECT … FROM …" aria-label="Data source query" class="w-full" :ui="fieldUi" />
             </div>
           </div>
-          <div class="config-label">
-            <label class="field-label" for="linti-yaml">linti.yaml</label>
-            <UButton
-              v-if="selected.config_example && !lintiYaml.trim()"
-              size="xs"
-              color="neutral"
-              variant="ghost"
-              icon="i-lucide-file-plus"
-              @click="lintiYaml = selected.config_example"
-            >
-              Insert config example
-            </UButton>
-          </div>
-          <textarea
-            id="linti-yaml"
-            v-model="lintiYaml"
-            class="code-editor"
-            spellcheck="false"
-            :rows="Math.max(3, lintiYaml.split('\n').length)"
-            placeholder="Empty: LinTi defaults"
-          />
-        </details>
+        </div>
+        <div v-if="hiddenContext.length" class="context-add">
+          <span class="muted">Add:</span>
+          <UButton
+            v-for="field in hiddenContext"
+            :key="field"
+            size="xs"
+            color="neutral"
+            variant="soft"
+            icon="i-lucide-plus"
+            @click="addContext(field)"
+          >
+            {{ contextLabels[field] }}
+          </UButton>
+        </div>
         <div class="run-actions">
           <UButton icon="i-lucide-play" :loading="busy" @click="run()">{{ busy ? 'Loading LinTi / checking…' : `Run ${selected.id}` }}</UButton>
           <UButton v-if="selected.auto_fix" icon="i-lucide-wand-sparkles" color="neutral" variant="outline" :disabled="busy" @click="run(true)">Apply auto-fix</UButton>
@@ -267,9 +289,10 @@ onBeforeUnmount(() => worker?.terminate())
         </div>
       </div>
 
-      <div v-if="selected.config_example" class="configuration">
-        <h3>Configuration</h3>
-        <pre><code>{{ selected.config_example }}</code></pre>
+      <div v-if="selected.default_config" class="configuration">
+        <h3>Default configuration</h3>
+        <p class="muted">What LinTi uses for {{ selected.id }} when <code>linti.yaml</code> sets nothing. Override any of these keys in your project's <code>linti.yaml</code>.</p>
+        <pre><code>{{ selected.default_config }}</code></pre>
       </div>
     </section>
   </div>
@@ -303,11 +326,11 @@ onBeforeUnmount(() => worker?.terminate())
 .code-editor { width: 100%; resize: vertical; padding: .8rem; border-radius: .45rem; border: 1px solid var(--ui-border-accented); background: var(--ui-bg); color: var(--ui-text); font: .85rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; tab-size: 4; }
 .code-editor:focus { outline: 2px solid var(--ui-primary); outline-offset: -1px; }
 .run-actions { margin-top: .8rem; }
-.context-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 .8rem; }
-.context { margin-top: .8rem; padding: .2rem .8rem .8rem; border: 1px solid var(--ui-border); border-radius: .45rem; background: var(--ui-bg); }
-.context summary { padding: .5rem 0 .1rem; cursor: pointer; font-size: .85rem; font-weight: 650; }
-.context-summary { color: var(--ui-text-muted); font-weight: 400; }
-.config-label { display: flex; align-items: end; justify-content: space-between; gap: .5rem; }
+.context { margin-top: .8rem; padding: .2rem .8rem .8rem; border: 1px solid var(--ui-border-accented); border-left: 3px solid var(--ui-primary); border-radius: .45rem; background: var(--ui-bg); }
+.context-title { margin: .5rem 0 0; font-size: .75rem; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--ui-text-muted); }
+.context-label { display: flex; align-items: end; justify-content: space-between; gap: .5rem; }
+.datasource-fields { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: .5rem; }
+.context-add { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-top: .7rem; }
 .error { color: var(--ui-error); overflow-wrap: anywhere; }
 .success { color: var(--ui-success); }
 .findings { margin-top: 1rem; }
@@ -320,7 +343,6 @@ onBeforeUnmount(() => worker?.terminate())
   .reference-sidebar { position: static; max-height: none; }
   .rule-list { max-height: 15rem; }
   .playground { padding: 1rem; }
-  .context-fields { grid-template-columns: minmax(0, 1fr); }
   /* 16px text on phones keeps iOS Safari from zooming in when the editor gets focus. */
   .code-editor { font-size: 1rem; }
 }
