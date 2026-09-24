@@ -18,7 +18,13 @@ try {
   const fixed = JSON.parse(run('nValue=1;', 'prolog', 'F220', true));
   assert.ok(fixed.fixes > 0);
   assert.ok(fixed.code.includes('nValue = 1;'));
-  console.log('LinTi/Pyodide smoke test passed (lint and auto-fix).');
+  // Example context (linti.yaml, parameters) must reach the rule.
+  const lowercase = JSON.stringify({ config: 'rules:\n  keyword_casing:\n    style: lowercase\n' });
+  assert.equal(JSON.parse(run('if (x = 1);\nendif;', 'prolog', 'F110', false, lowercase)).issues.length, 0);
+  assert.ok(JSON.parse(run('IF (x = 1);\nENDIF;', 'prolog', 'F110', false, lowercase)).issues.length > 0);
+  const parameter = JSON.stringify({ parameters: ['pFactor'] });
+  assert.equal(JSON.parse(run("pFactor = 2;", 'prolog', 'C210', false, parameter)).issues.length > 0, true);
+  console.log('LinTi/Pyodide smoke test passed (lint, auto-fix, and example context).');
 } finally {
   run.destroy();
 }

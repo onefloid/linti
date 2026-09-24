@@ -32,3 +32,13 @@ def test_checked_in_json_matches_export():
     example = next(rule for rule in json.loads(render_json()) if rule["id"] == "C150")
     assert example["config_key"] == "misplaced_function"
     assert example["examples"]
+
+
+def test_export_carries_example_context():
+    rules = {rule["id"]: rule for rule in collect_rules()}
+    lowercase = next(e for e in rules["F110"]["examples"] if e["config"])
+    assert "style: lowercase" in lowercase["config"]
+    assert lowercase["procedure"] == "prolog"
+    placement = rules["C150"]["examples"]
+    assert {example["procedure"] for example in placement} - {"prolog"}
+    assert any(example["parameters"] for example in rules["C210"]["examples"])

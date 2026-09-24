@@ -1,7 +1,17 @@
 <script setup lang="ts">
 import rules from '../../public/rules.json'
 
-type Example = { code: string, description: string, valid: boolean }
+type Example = {
+  code: string
+  description: string
+  valid: boolean
+  procedure: string
+  config: string
+  parameters: string[]
+  variables: string[]
+  datasource_type: string | null
+  datasource_query: string | null
+}
 type Rule = {
   id: string
   name: string
@@ -19,7 +29,7 @@ type Rule = {
   examples: Example[]
 }
 type Finding = { rule_id: string, message: string, line: number, column: number, severity: string }
-type Result = { code: string, fixes: number, issues: Finding[] }
+type Result = { code: string, fixes: number, warnings: string[], issues: Finding[] }
 
 const allRules = rules as Rule[]
 const route = useRoute()
@@ -44,6 +54,19 @@ const selectedId = ref('C150')
 const selected = computed(() => allRules.find(rule => rule.id === selectedId.value) || allRules[0]!)
 const code = ref('')
 const procedure = ref('prolog')
+const lintiYaml = ref('')
+const parameters = ref('')
+const variables = ref('')
+const datasourceType = ref('')
+const datasourceQuery = ref('')
+const splitNames = (text: string) => text.split(/[\s,]+/).filter(Boolean)
+const contextOpen = ref(false)
+const contextSummary = computed(() => [
+  lintiYaml.value.trim() && 'custom config',
+  splitNames(parameters.value).length && 'parameters',
+  splitNames(variables.value).length && 'variables',
+  datasourceType.value.trim() && `${datasourceType.value.trim()} data source`,
+].filter(Boolean).join(', '))
 const busy = ref(false)
 const error = ref('')
 const result = ref<Result | null>(null)
@@ -58,6 +81,14 @@ let requestId = 0
 
 function chooseExample(example?: Example) {
   code.value = example?.code || 'nValue=1;'
+  procedure.value = example?.procedure || 'prolog'
+  lintiYaml.value = example?.config || ''
+  parameters.value = example?.parameters.join(', ') || ''
+  variables.value = example?.variables.join(', ') || ''
+  datasourceType.value = example?.datasource_type || ''
+  datasourceQuery.value = example?.datasource_query || ''
+  // Show what the example depends on instead of hiding it in a closed panel.
+  contextOpen.value = Boolean(contextSummary.value)
   result.value = null
   error.value = ''
 }
@@ -105,7 +136,14 @@ function run(fix = false) {
     busy.value = false
     error.value = event.message || 'The browser could not load Pyodide.'
   }
-  worker.postMessage({ id, code: code.value, procedure: procedure.value, ruleId: selected.value.id, fix })
+  const context = {
+    config: lintiYaml.value,
+    parameters: splitNames(parameters.value),
+    variables: splitNames(variables.value),
+    datasource_type: datasourceType.value.trim(),
+    datasource_query: datasourceQuery.value.trim(),
+  }
+  worker.postMessage({ id, code: code.value, procedure: procedure.value, ruleId: selected.value.id, fix, context })
 }
 
 onBeforeUnmount(() => worker?.terminate())
@@ -170,12 +208,55 @@ onBeforeUnmount(() => worker?.terminate())
         <USelect id="procedure" v-model="procedure" :items="procedureItems" size="lg" class="w-44 max-w-full" :ui="fieldUi" />
         <label class="field-label" for="ti-code">TI code</label>
         <textarea id="ti-code" v-model="code" class="code-editor" spellcheck="false" rows="10" aria-label="TI code" />
+        <details class="context" :open="contextOpen" @toggle="contextOpen = ($event.target as HTMLDetailsElement).open">
+          <summary>Process context &amp; linti.yaml<span v-if="contextSummary" class="context-summary"> · {{ contextSummary }}</span></summary>
+          <div class="context-fields">
+            <div>
+              <label class="field-label" for="parameters">Process parameters</label>
+              <UInput id="parameters" v-model="parameters" placeholder="pYear, pVersion" class="w-full" :ui="fieldUi" />
+            </div>
+            <div>
+              <label class="field-label" for="variables">Data source variables</label>
+              <UInput id="variables" v-model="variables" placeholder="vRegion, vAmount" class="w-full" :ui="fieldUi" />
+            </div>
+            <div>
+              <label class="field-label" for="datasource-type">Data source type</label>
+              <UInput id="datasource-type" v-model="datasourceType" placeholder="ODBC, ASCII, VIEW…" class="w-full" :ui="fieldUi" />
+            </div>
+            <div>
+              <label class="field-label" for="datasource-query">Data source query</label>
+              <UInput id="datasource-query" v-model="datasourceQuery" placeholder="SELECT … FROM …" class="w-full" :ui="fieldUi" />
+            </div>
+          </div>
+          <div class="config-label">
+            <label class="field-label" for="linti-yaml">linti.yaml</label>
+            <UButton
+              v-if="selected.config_example && !lintiYaml.trim()"
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-file-plus"
+              @click="lintiYaml = selected.config_example"
+            >
+              Insert config example
+            </UButton>
+          </div>
+          <textarea
+            id="linti-yaml"
+            v-model="lintiYaml"
+            class="code-editor"
+            spellcheck="false"
+            :rows="Math.max(3, lintiYaml.split('\n').length)"
+            placeholder="Empty: LinTi defaults"
+          />
+        </details>
         <div class="run-actions">
           <UButton icon="i-lucide-play" :loading="busy" @click="run()">{{ busy ? 'Loading LinTi / checking…' : `Run ${selected.id}` }}</UButton>
           <UButton v-if="selected.auto_fix" icon="i-lucide-wand-sparkles" color="neutral" variant="outline" :disabled="busy" @click="run(true)">Apply auto-fix</UButton>
         </div>
         <p v-if="error" role="alert" class="error">{{ error }}</p>
         <div v-if="result" class="findings" aria-live="polite">
+          <p v-for="(warning, index) in result.warnings" :key="`w${index}`" class="notice">{{ warning }}</p>
           <p v-if="result.fixes" class="success">Applied {{ result.fixes }} fix{{ result.fixes === 1 ? '' : 'es' }}.</p>
           <p v-if="!result.issues.length" class="success">No findings for {{ selected.id }}.</p>
           <ul v-else>
@@ -222,6 +303,11 @@ onBeforeUnmount(() => worker?.terminate())
 .code-editor { width: 100%; resize: vertical; padding: .8rem; border-radius: .45rem; border: 1px solid var(--ui-border-accented); background: var(--ui-bg); color: var(--ui-text); font: .85rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; tab-size: 4; }
 .code-editor:focus { outline: 2px solid var(--ui-primary); outline-offset: -1px; }
 .run-actions { margin-top: .8rem; }
+.context-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 .8rem; }
+.context { margin-top: .8rem; padding: .2rem .8rem .8rem; border: 1px solid var(--ui-border); border-radius: .45rem; background: var(--ui-bg); }
+.context summary { padding: .5rem 0 .1rem; cursor: pointer; font-size: .85rem; font-weight: 650; }
+.context-summary { color: var(--ui-text-muted); font-weight: 400; }
+.config-label { display: flex; align-items: end; justify-content: space-between; gap: .5rem; }
 .error { color: var(--ui-error); overflow-wrap: anywhere; }
 .success { color: var(--ui-success); }
 .findings { margin-top: 1rem; }
@@ -234,6 +320,7 @@ onBeforeUnmount(() => worker?.terminate())
   .reference-sidebar { position: static; max-height: none; }
   .rule-list { max-height: 15rem; }
   .playground { padding: 1rem; }
+  .context-fields { grid-template-columns: minmax(0, 1fr); }
   /* 16px text on phones keeps iOS Safari from zooming in when the editor gets focus. */
   .code-editor { font-size: 1rem; }
 }

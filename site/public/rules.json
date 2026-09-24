@@ -17,17 +17,35 @@
       {
         "code": "IF (x = 1);\n    nResult = 10;\nENDIF;",
         "description": "uppercase style",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "if (x = 1);\n    nResult = 10;\nendif;",
         "description": "lowercase style",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "rules:\n  keyword_casing:\n    style: lowercase\n",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "IF (x = 1);\n    nResult = 10;\nendif;",
         "description": "Mixed casing",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -49,12 +67,24 @@
       {
         "code": "nVar = nA + nB;",
         "description": "",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "nVar=nA+nB;",
         "description": "Missing spaces around operators",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -76,12 +106,24 @@
       {
         "code": "func(a, b, c);",
         "description": "",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "func(a,b,c);",
         "description": "Missing spaces after commas",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -103,12 +145,24 @@
       {
         "code": "nVar = 1;",
         "description": "",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "nVar = 1 ;",
         "description": "Space before semicolon",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -130,12 +184,24 @@
       {
         "code": "func( a, b );",
         "description": "",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "func(a, b);",
         "description": "Missing spaces inside parentheses",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -157,12 +223,24 @@
       {
         "code": "nVar = 1;",
         "description": "",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "nVar  =  1;",
         "description": "Multiple consecutive spaces",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -184,12 +262,24 @@
       {
         "code": "nVar = 1;",
         "description": "",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "nVar = 1;   ",
         "description": "Trailing spaces at end of line",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -211,22 +301,46 @@
       {
         "code": "IF (nValue > 0);\n    nResult = 10;\nENDIF;",
         "description": "4-space indent",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "sValue = CellGetS(\n    'Cube',\n    'Element'\n);",
         "description": "Wrapped argument list (hanging indent)",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "IF (nValue > 0);\nnResult = 10;\nENDIF;",
         "description": "Missing indentation",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "sValue = CellGetS( 'Cube',\n           'Element' );",
         "description": "Wrapped line not at the hanging indent",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -248,12 +362,24 @@
       {
         "code": "nValue = 5;\nsMessage = 'test';",
         "description": "Each statement on its own line",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "nValue = 5; sMessage = 'test';",
         "description": "Multiple statements on same line",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -275,17 +401,35 @@
       {
         "code": "sValue = CellGetS(\n    'Cube',\n    'Element'\n);",
         "description": "Wrapped at the argument boundaries",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "IF(\n    nA = 1\n    & nB = 2\n);",
         "description": "Wrapped before each operator",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "sValue = CellGetS( 'Cube', 'AAAA', 'BBBB', 'CCCC', 'DDDD' );",
         "description": "Single line over the limit",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "rules:\n  max_line_length:\n    limit: 40\n",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -307,32 +451,68 @@
       {
         "code": "nCount = 5;",
         "description": "Numeric variable",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "sMessage = 'test';",
         "description": "String variable",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "count = 5;",
         "description": "Missing 'n' prefix",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "name = 'test';",
         "description": "Missing 's' prefix",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "i = 0;\nWHILE(i < 10);\n  i = i + 1;\nEND;",
         "description": "Loop counter before WHILE (exempt when allow_loop_counter_variables: true)",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "rules:\n  variable_prefix:\n    allow_loop_counter_variables: true\n",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "DatasourceASCIIDecimalSeparator = ',';",
         "description": "Predefined variable (excluded)",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -356,12 +536,24 @@
       {
         "code": "sName = 'hello';\nIF(sName @= 'hello');",
         "description": "Consistent casing throughout",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "sName = 'hello';\nIF(sname @= 'hello');",
         "description": "Inconsistent casing for the same variable",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -383,17 +575,41 @@
       {
         "code": "pLogOutput",
         "description": "Valid parameter name",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [
+          "pLogOutput"
+        ],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "pFactor",
         "description": "",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [
+          "pFactor"
+        ],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "LogOutput",
         "description": "Missing 'p' prefix",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [
+          "LogOutput"
+        ],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -415,17 +631,41 @@
       {
         "code": "vDimension",
         "description": "Valid variable name",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [
+          "vDimension"
+        ],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "vHierarchy",
         "description": "",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [
+          "vHierarchy"
+        ],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "Dimension",
         "description": "Missing 'v' prefix",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [
+          "Dimension"
+        ],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -449,12 +689,24 @@
       {
         "code": "#Region - Docstring\n# Description:\n# Does something useful\n#EndRegion - Docstring\nnVar = 1;",
         "description": "",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "nVar = 1;",
         "description": "No docstring region before code",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -478,22 +730,46 @@
       {
         "code": "IF (nValue = 1);\n    nResult = 10;\nENDIF;",
         "description": "IF block with executable code",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "IF (nValue = 1);\n    nResult = 10;\nELSE;\nENDIF;",
         "description": "Empty ELSE block (auto-fixable: branch removed)",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "IF (nValue = 1);\nENDIF;",
         "description": "Empty IF block",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "WHILE (nValue < 10);\n    # todo\nEND;",
         "description": "WHILE block with only a comment",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -517,17 +793,35 @@
       {
         "code": "IF (nValue = 1);\n    ProcessBreak();\nENDIF;",
         "description": "ProcessBreak guarded by an IF condition",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "nValue = 5;\nProcessQuit();",
         "description": "ProcessQuit in the main program body",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "WHILE (nValue = 1);\n    Break;\nEND;",
         "description": "Break in a bare WHILE loop (no enclosing IF)",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -551,12 +845,24 @@
       {
         "code": "# In Metadata/Data section\nIF (nValue = 0);\n    ItemSkip();\nENDIF;",
         "description": "ItemSkip in Metadata/Data",
-        "valid": true
+        "valid": true,
+        "procedure": "data",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "# In Prolog section\nItemSkip();",
         "description": "ItemSkip in Prolog",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -578,12 +884,24 @@
       {
         "code": "IF (nValue = 1);\n    nResult = 10;\n    ProcessQuit();\nENDIF;",
         "description": "ProcessQuit at the end of the block",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "IF (nValue = 1);\n    ProcessQuit();\n    nResult = 10;\nENDIF;",
         "description": "Unreachable code after ProcessQuit",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -605,32 +923,68 @@
       {
         "code": "DimensionElementInsert('Product', '', vProduct, 'N');",
         "description": "Metadata: create the element",
-        "valid": true
+        "valid": true,
+        "procedure": "metadata",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "AttrPutS(vDescription, 'Product', vProduct, 'Description');",
         "description": "Data: write the attribute after Metadata completes",
-        "valid": true
+        "valid": true,
+        "procedure": "data",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "DisableBulkLoadMode();",
         "description": "Epilog: leave bulk load mode when the process ends",
-        "valid": true
+        "valid": true,
+        "procedure": "epilog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "ItemSkip();",
         "description": "Prolog: invalid placement",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "DisableBulkLoadMode();",
         "description": "Data: invalid placement",
-        "valid": false
+        "valid": false,
+        "procedure": "data",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "AttrPutS(vDescription, 'Product', vProduct, 'Description');",
         "description": "Metadata: not recommended placement",
-        "valid": false
+        "valid": false,
+        "procedure": "metadata",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -654,17 +1008,41 @@
       {
         "code": "cLogOutput = pLogOutput;\ncLogOutput = 0;",
         "description": "Read parameter, modify local copy",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [
+          "pLogOutput"
+        ],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "pLogOutput = 0;",
         "description": "Modifying a parameter",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [
+          "pLogOutput"
+        ],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "vDimension = 'NewValue';",
         "description": "Modifying a data source variable",
-        "valid": false
+        "valid": false,
+        "procedure": "data",
+        "config": "",
+        "parameters": [],
+        "variables": [
+          "vDimension"
+        ],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -688,12 +1066,24 @@
       {
         "code": "cRate = 1.5;",
         "description": "First assignment",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "cRate = 1.5;\ncRate = 2.0;",
         "description": "Reassignment",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -717,17 +1107,35 @@
       {
         "code": "RunProcess('pLoad_Customer', 'pYear', '2026');",
         "description": "",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "ExecuteProcess('pBuild_Dimensions');",
         "description": "",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "RunProcess(pProcessName);",
         "description": "Variable as process name",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -751,22 +1159,46 @@
       {
         "code": "nExists = HierarchyElementExists('Region', 'Region', 'EMEA');",
         "description": "hierarchy-aware function (valid in any mode)",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "nExists = DimensionElementExists('Region', 'EMEA');",
         "description": "enforce mode: standard function (use HierarchyElementExists)",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "rules:\n  use_hierarchy_aware_functions:\n    mode: enforce\n",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "nParent = ElementParent('Region', 'Region', 'EMEA');\nnIndex = DIMIX('Region', 'EMEA');",
         "description": "consistent mode: mixes hierarchy-aware and standard styles",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "nExists = DimensionElementExists('Region:Detail', 'EMEA');",
         "description": "dimension argument addresses a hierarchy; use HierarchyElementExists with an explicit hierarchy",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -788,22 +1220,46 @@
       {
         "code": "DimensionElementInsertByAlias('Product', '', 'Alias', 'N');",
         "description": "Undocumented: not part of IBM's supported API",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "LockOn;",
         "description": "Reported without parentheses too — TI makes them optional on a no-argument call",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "DimensionElementInsertDirect('Product', '', 'Element', 'N');",
         "description": "The documented equivalent is always allowed",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "DataSpread;",
         "description": "Allowed once the function is listed under `allowed_functions`",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "rules:\n  do_not_use_undocumented_functions:\n    allowed_functions:\n    - DataSpread\n",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -825,22 +1281,46 @@
       {
         "code": "nStatus = GetJobStatus(nJobId);",
         "description": "V11 mode: GetJobStatus was introduced in v12",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "CubeSaveData('Sales');",
         "description": "V12 mode: CubeSaveData is not supported in v12",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "SaveDataAll;",
         "description": "V12 mode: reported without parentheses too — TI makes them optional on a no-argument call",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "nValue = CellGetN('Sales', 'Actual', 'Jan');",
         "description": "A function available in both versions is always allowed",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -864,12 +1344,24 @@
       {
         "code": "ExecuteCommand('rm -rf /tmp/*');",
         "description": "Prohibited",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "ExecuteCommand(sUserCommand);",
         "description": "Prohibited",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -893,12 +1385,26 @@
       {
         "code": "ODBCOpen('MyDatasource', 'AdminUser', pPassword);",
         "description": "Password as defined parameter",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [
+          "pPassword"
+        ],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "ODBCOpen('MyDatasource', 'AdminUser', 'hardcodedPassword');",
         "description": "Hardcoded password",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -920,42 +1426,90 @@
       {
         "code": "sPassword = 'hunter2';",
         "description": "Hardcoded credential — ships with the process",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "sPassword = 'let' | 'mein';",
         "description": "Split across a concatenation — folded back together",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "sPassword = 12345;",
         "description": "A numeric PIN is still a hardcoded secret",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "sApiKey = CellGetS('Config', 'Api', 'Key');",
         "description": "Stored in a cube — readable by anyone with file access to the TM1 data directory",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "sPassword = pPassword;",
         "description": "Passed in as a process parameter",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "sPassword = 'prefix_' | pDyn;",
         "description": "Only half known — the secret itself may be dynamic",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "sPassword = '';",
         "description": "Empty-string initialisation is a common no-op",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "sCustomer = CellGetS('Sales', '2026', 'Customer');",
         "description": "Ordinary cube read — the name is not secret-looking",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },
@@ -979,17 +1533,47 @@
       {
         "code": "IF(vRegion @= 'EMEA');\n  CellPutN(vAmount, 'Sales', vRegion, vMonth);\nENDIF;",
         "description": "all writes conditional, no WHERE — filter in SQL",
-        "valid": false
+        "valid": false,
+        "procedure": "data",
+        "config": "",
+        "parameters": [],
+        "variables": [
+          "vRegion",
+          "vAmount",
+          "vMonth"
+        ],
+        "datasource_type": "ODBC",
+        "datasource_query": "SELECT region, amount, month FROM t"
       },
       {
         "code": "IF(vRegion @= 'EMEA');\n  ItemSkip();\nENDIF;",
         "description": "ItemSkip() filters rows, no WHERE — filter in SQL",
-        "valid": false
+        "valid": false,
+        "procedure": "data",
+        "config": "",
+        "parameters": [],
+        "variables": [
+          "vRegion",
+          "vAmount",
+          "vMonth"
+        ],
+        "datasource_type": "ODBC",
+        "datasource_query": "SELECT region, amount, month FROM t"
       },
       {
         "code": "CellPutN(vAmount, 'Sales', vRegion, vMonth);",
         "description": "filtering done in SQL WHERE clause",
-        "valid": true
+        "valid": true,
+        "procedure": "data",
+        "config": "",
+        "parameters": [],
+        "variables": [
+          "vRegion",
+          "vAmount",
+          "vMonth"
+        ],
+        "datasource_type": "ODBC",
+        "datasource_query": "SELECT region, amount, month FROM t WHERE region = ?"
       }
     ]
   },
@@ -1013,12 +1597,24 @@
       {
         "code": "nValue = 1;",
         "description": "A well-formed statement parses and is fully linted",
-        "valid": true
+        "valid": true,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       },
       {
         "code": "nValue = 1",
         "description": "Missing terminating semicolon — cannot be parsed",
-        "valid": false
+        "valid": false,
+        "procedure": "prolog",
+        "config": "",
+        "parameters": [],
+        "variables": [],
+        "datasource_type": null,
+        "datasource_query": null
       }
     ]
   },

@@ -31,13 +31,13 @@ async function initialize() {
 }
 
 self.onmessage = async ({ data }) => {
-  const { id, code, procedure, ruleId, fix } = data;
+  const { id, code, procedure, ruleId, fix, context } = data;
   try {
     const pyodide = await initialize();
     // Pass user input as data, never interpolate it into Python source.
     const run = pyodide.globals.get('run_linti');
     try {
-      const result = run(code, procedure, ruleId, fix);
+      const result = run(code, procedure, ruleId, fix, JSON.stringify(context || {}));
       self.postMessage({ id, result: JSON.parse(result) });
     } finally {
       run.destroy();

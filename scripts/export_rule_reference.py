@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Mapping
 from pathlib import Path
+
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
@@ -79,11 +82,33 @@ def _record(rule_id, metadata, config_key, enabled_by_default) -> dict:
         "config_example": metadata.config_example,
         "deprecated_by": metadata.deprecated_by,
         "previous_ids": deprecated_ids_for(rule_id),
-        "examples": [
-            {"code": example.code, "description": example.description, "valid": example.valid}
-            for example in metadata.examples
-        ],
+        "examples": [_example(example) for example in metadata.examples],
     }
+
+
+def _example(example) -> dict:
+    """Serialize an example with the process context it has to run in."""
+    return {
+        "code": example.code,
+        "description": example.description,
+        "valid": example.valid,
+        "procedure": example.procedure,
+        # linti.yaml text, so the playground can show and edit it as-is.
+        "config": yaml.safe_dump(_plain(example.config), sort_keys=False) if example.config else "",
+        "parameters": list(example.parameters),
+        "variables": list(example.variables),
+        "datasource_type": example.datasource_type,
+        "datasource_query": example.datasource_query,
+    }
+
+
+def _plain(value):
+    """Turn Mapping/tuple config values into types ``yaml.safe_dump`` accepts."""
+    if isinstance(value, Mapping):
+        return {key: _plain(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain(item) for item in value]
+    return value
 
 
 def render_json() -> str:
