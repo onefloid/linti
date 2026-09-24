@@ -123,6 +123,11 @@ to a project root. `cli/rule_explainer.py` powers `linti explain`.
 1. Create `rules/<category>/<name>_rule.py` subclassing `BaseTokenRule` or
    `BaseStatementRule`; set `CONFIG_KEY`, `RULE_ID`, `METADATA`, and implement
    `interested_in` + `visit`. Attach a `Fix` to issues if it is safely fixable.
-2. Add a test under `tests/`.
+2. Add a test under `tests/`. The rule's `METADATA.examples` are tests too:
+   `tests/test_rule_examples.py` lints each one with its rule alone and fails
+   unless invalid examples are reported and valid ones are not. An example that
+   needs context declares it on the `RuleExample` (`procedure`, `config`,
+   `parameters`, `variables`, `datasource_type`/`datasource_query`); run one by
+   hand with `linti.rules.examples.run_example`.
 3. Run `python scripts/generate_all_rules.py` to refresh `ALL_RULES.md`.
 4. Update `README.md` if user-facing, and bump the version in `pyproject.toml`.

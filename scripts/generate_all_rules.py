@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from linti.linter.lint_issue import Severity  # noqa: E402
 from linti.rules import _RULE_REGISTRY  # noqa: E402
+from linti.rules.examples import describe_context  # noqa: E402
 from linti.rules.Rule import RuleMetadata  # noqa: E402
 from linti.rules.rule_ids import (  # noqa: E402
     GROUP_NAMES,
@@ -214,6 +215,9 @@ def _render_examples(label: str, lang: str, examples: list) -> str:
     for ex in examples:
         if ex.description:
             lines.append(f"# {ex.description}")
+        context = describe_context(ex)
+        if context:
+            lines.append(f"# Context: {context}")
         lines.append(ex.code)
     lines.extend(["```", ""])
     return "\n".join(lines)

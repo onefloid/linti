@@ -10,10 +10,14 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Mapping
 from pathlib import Path
+
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+from linti.config import Config  # noqa: E402
 from linti.rules import _RULE_REGISTRY  # noqa: E402
 from linti.rules.rule_ids import (  # noqa: E402
     GROUP_NAMES,
@@ -77,13 +81,55 @@ def _record(rule_id, metadata, config_key, enabled_by_default) -> dict:
         "config_key": config_key,
         "explanation": metadata.explanation,
         "config_example": metadata.config_example,
+        "default_config": _default_config(config_key, metadata, enabled_by_default),
         "deprecated_by": metadata.deprecated_by,
         "previous_ids": deprecated_ids_for(rule_id),
-        "examples": [
-            {"code": example.code, "description": example.description, "valid": example.valid}
-            for example in metadata.examples
-        ],
+        "examples": [_example(example) for example in metadata.examples],
     }
+
+
+def _default_config(config_key, metadata, enabled_by_default) -> str:
+    """The rule's effective defaults as linti.yaml text, read from ``Config()``.
+
+    Unlike the hand-written ``config_example``, this is what LinTi uses when a
+    project sets nothing. Rules without a typed config only know ``enabled``
+    and ``severity``.
+    """
+    if not config_key:
+        return ""
+    declared = Config().rules.model_dump(mode="json", by_alias=True).get(config_key) or {}
+    options = {key: value for key, value in declared.items() if key not in {"enabled", "severity"}}
+    settings = {
+        "enabled": declared.get("enabled", enabled_by_default),
+        "severity": declared.get("severity") or metadata.severity.value,
+        **options,
+    }
+    return yaml.safe_dump({"rules": {config_key: settings}}, sort_keys=False)
+
+
+def _example(example) -> dict:
+    """Serialize an example with the process context it has to run in."""
+    return {
+        "code": example.code,
+        "description": example.description,
+        "valid": example.valid,
+        "procedure": example.procedure,
+        # linti.yaml text, so the playground can show and edit it as-is.
+        "config": yaml.safe_dump(_plain(example.config), sort_keys=False) if example.config else "",
+        "parameters": list(example.parameters),
+        "variables": list(example.variables),
+        "datasource_type": example.datasource_type,
+        "datasource_query": example.datasource_query,
+    }
+
+
+def _plain(value):
+    """Turn Mapping/tuple config values into types ``yaml.safe_dump`` accepts."""
+    if isinstance(value, Mapping):
+        return {key: _plain(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain(item) for item in value]
+    return value
 
 
 def render_json() -> str:

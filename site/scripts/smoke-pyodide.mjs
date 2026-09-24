@@ -19,6 +19,12 @@ try {
   const fixed = JSON.parse(run('nValue=1;', 'prolog', 'F220', true));
   assert.ok(fixed.fixes > 0);
   assert.ok(fixed.code.includes('nValue = 1;'));
+  // Example context (linti.yaml, parameters) must reach the rule.
+  const lowercase = JSON.stringify({ config: 'rules:\n  keyword_casing:\n    style: lowercase\n' });
+  assert.equal(JSON.parse(run('if (x = 1);\nendif;', 'prolog', 'F110', false, lowercase)).issues.length, 0);
+  assert.ok(JSON.parse(run('IF (x = 1);\nENDIF;', 'prolog', 'F110', false, lowercase)).issues.length > 0);
+  const parameter = JSON.stringify({ parameters: ['pFactor'] });
+  assert.equal(JSON.parse(run("pFactor = 2;", 'prolog', 'C210', false, parameter)).issues.length > 0, true);
 
   const paCode = await readFile(new URL('../../example/pa-code.ti', import.meta.url), 'utf8');
   const process = JSON.parse(runPlayground(paCode, 'rules:\n  item_skip:\n    enabled: true\n', false));
@@ -28,7 +34,7 @@ try {
   assert.ok(Object.values(fixedProcess.fixes).reduce((a, b) => a + b, 0) > 0);
   assert.ok(fixedProcess.code.includes('#JSON_PROPERTIES'));
   assert.match(JSON.parse(runPlayground(paCode, 'rules: [', false)).error, /Invalid linti\.yaml/);
-  console.log('LinTi/Pyodide smoke test passed (rule and whole-process lint and auto-fix).');
+  console.log('LinTi/Pyodide smoke test passed (rule with example context, whole-process lint and auto-fix).');
 } finally {
   run.destroy();
   runPlayground.destroy();

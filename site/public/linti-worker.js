@@ -39,7 +39,7 @@ self.onmessage = async ({ data }) => {
     try {
       const result = action === 'process'
         ? run(data.code, data.config || '', data.fix)
-        : run(data.code, data.procedure, data.ruleId, data.fix);
+        : run(data.code, data.procedure, data.ruleId, data.fix, JSON.stringify(data.context || {}));
       const parsed = JSON.parse(result);
       self.postMessage(parsed.error ? { id, error: parsed.error } : { id, result: parsed });
     } finally {
