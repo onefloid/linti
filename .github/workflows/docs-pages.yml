@@ -6,6 +6,7 @@ on:
       - 'site/**'
       - 'src/linti/**'
       - 'scripts/export_rule_reference.py'
+      - 'pyproject.toml'
       - '.github/workflows/docs-pages.yml'
   push:
     branches: [main]

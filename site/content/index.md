@@ -11,4 +11,4 @@ LinTi checks TM1 TurboIntegrator scripts for formatting mistakes, naming convent
 Explore the rules
 ::
 
-Install the CLI with `pip install linti`, or explore the [source on GitHub](https://github.com/deutschebahn/linti).
+Install the CLI with `pip install linti`, or explore the [source on GitHub](https://github.com/onefloid/linti).
