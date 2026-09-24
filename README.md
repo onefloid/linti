@@ -29,6 +29,9 @@ It is not affiliated with, endorsed by, sponsored by, or maintained by IBM. TM1,
 * Parser (AST)
 * Formatter
 * Provider-based input format support
+* Browser playground: paste a whole process, lint it and apply auto-fixes
+  without installing anything — it runs locally via Pyodide
+  (<https://onefloid.github.io/linti/playground>, built from `site/`)
 
 ## Supported Input Formats
 

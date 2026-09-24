@@ -13,7 +13,7 @@ export default defineNuxtConfig({
   },
   nitro: {
     prerender: {
-      routes: ['/rules'],
+      routes: ['/rules', '/playground'],
     },
   },
 })

@@ -82,6 +82,11 @@ every rule before each pass — stateful rules must implement it.
 - `linter/api.py` — high-level orchestration: `lint_process_model` runs the full
   per-procedure pipeline; `lint_process` / `lint_all` drive a provider and
   optionally auto-fix then re-lint.
+- `linter/text_api.py` — `lint_text` lints/fixes a whole process given as a
+  string (format auto-detected, `linti.yaml` as text) by routing it through the
+  normal providers in a temp dir. Backs the browser playground (`site/`,
+  Pyodide), so it must stay free of CLI/Typer imports; `linter_from_config`
+  lives in `linter/api.py` for the same reason.
 - `linter/constant_evaluation.py` — the *interpreter*: process-wide
   `ConstantEvaluationIndex`, shared by all sections and independent of the
   per-rule reset cycle. It tracks literal assignments and folded literal

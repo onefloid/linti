@@ -6,6 +6,10 @@
     "generate": "nuxt generate"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lint": "^6.9.7",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
     "better-sqlite3": "^12.11.1",
     "docus": "5.13.0",
     "nuxt": "4.5.2",

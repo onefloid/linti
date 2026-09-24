@@ -1,11 +1,13 @@
 """Small JSON bridge shared by the browser worker and Pyodide smoke test."""
 
 import json
+from dataclasses import asdict
 
 from linti.config import Config
 from linti.linter.api import lint_process_model
 from linti.linter.fixer import auto_fix_process
 from linti.linter.linter import Linter
+from linti.linter.text_api import lint_text
 from linti.model.process_ir import ProcessIR, ProcedureInfo
 from linti.rules.rule_factory import create_rules
 
@@ -37,3 +39,16 @@ def run_linti(source, procedure, rule_id, apply_fix):
             ],
         }
     )
+
+
+def run_playground(text, config_text, apply_fix):
+    """Lint a whole pasted process; see linti.linter.text_api.lint_text.
+
+    Input problems (bad config, unreadable process) come back as a short
+    ``error`` message instead of a Python traceback.
+    """
+    try:
+        result = lint_text(text, config_text, auto_fix=apply_fix)
+    except (ValueError, OSError) as exc:
+        return json.dumps({"error": str(exc)})
+    return json.dumps(asdict(result))

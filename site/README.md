@@ -2,6 +2,8 @@
 
 The Docus site lives inside the LinTi repository. Its rule reference is exported
 from the Python rule registry; Pyodide runs the actual wheel in a Web Worker.
+The `/playground` page lints whole pasted processes through
+`linti.linter.text_api.lint_text` (format auto-detection, `linti.yaml`, auto-fix).
 
 ```bash
 python -m pip install -e .
