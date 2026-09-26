@@ -16,6 +16,7 @@ const highlighted = ref('')
 const openCards = ref(new Set<string>())
 const mobilePane = ref<'form' | 'yaml'>('form')
 const copied = ref('')
+const undoPresetText = ref<string | null>(null)
 
 let view: EditorView | undefined
 let setDiagnostics: typeof import('@codemirror/lint').setDiagnostics | undefined
@@ -133,6 +134,7 @@ function pushDiagnostics() {
 function syncFromEditor() {
   clearTimeout(parseTimer)
   parseTimer = undefined
+  undoPresetText.value = null
   const text = currentText()
   yamlText.value = text
   parsed.value = parseConfig(text)
@@ -158,6 +160,7 @@ function updateField(field: FieldSpec, value: unknown) {
   // Typing in the YAML that is still waiting for its debounce comes first.
   if (parseTimer) syncFromEditor()
   if (locked.value) return
+  undoPresetText.value = null
   const { doc } = parsed.value
   setOption(doc, field.path, value, field.default)
   applyText(stringifyConfig(doc))
@@ -169,8 +172,22 @@ function hasOwnContent() {
 }
 
 function choosePreset(preset: Preset) {
-  if (hasOwnContent() && !confirm(`Replace your linti.yaml with the “${preset.title}” preset?`)) return
-  applyText(presetText(preset))
+  const next = presetText(preset)
+  const previous = currentText()
+  if (previous === next) return
+  // A pending YAML edit must not reapply stale text after the preset switch.
+  clearTimeout(parseTimer)
+  parseTimer = undefined
+  undoPresetText.value = previous
+  applyText(next)
+  openCards.value = new Set(ruleCards.filter(card => cardChanged(card)).map(card => card.configKey))
+}
+
+function undoPreset() {
+  if (undoPresetText.value === null) return
+  const previous = undoPresetText.value
+  undoPresetText.value = null
+  applyText(previous)
   openCards.value = new Set(ruleCards.filter(card => cardChanged(card)).map(card => card.configKey))
 }
 
@@ -197,6 +214,7 @@ async function upload(event: Event) {
   input.value = ''
   if (!file) return
   if (hasOwnContent() && !confirm(`Replace your linti.yaml with ${file.name}?`)) return
+  undoPresetText.value = null
   applyText(await file.text())
 }
 
@@ -308,6 +326,9 @@ onBeforeUnmount(() => {
         <span class="preset-description">{{ preset.description }}</span>
       </button>
     </section>
+    <p v-if="undoPresetText !== null" class="preset-undo" role="status">
+      Preset applied. <button type="button" @click="undoPreset()">Undo and restore your previous linti.yaml</button>
+    </p>
 
     <div class="pane-switch" role="tablist" aria-label="View">
       <button role="tab" :aria-selected="mobilePane === 'form'" :class="{ active: mobilePane === 'form' }" @click="mobilePane = 'form'">Form</button>
@@ -436,6 +457,8 @@ onBeforeUnmount(() => {
 .preset.active { border-color: var(--ui-primary); box-shadow: inset 0 0 0 1px var(--ui-primary); background: color-mix(in srgb, var(--ui-primary) 6%, var(--ui-bg)); }
 .preset-title { font-weight: 700; }
 .preset-description { font-size: .82rem; line-height: 1.4; color: var(--ui-text-muted); }
+.preset-undo { margin: -.8rem 0 1.4rem; font-size: .85rem; color: var(--ui-text-muted); }
+.preset-undo button { color: var(--ui-primary); text-decoration: underline; }
 .pane-switch { display: none; }
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(18rem, 26rem); gap: 1.4rem; align-items: start; }
 .form { min-width: 0; border: 0; padding: 0; margin: 0; }
