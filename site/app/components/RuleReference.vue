@@ -66,16 +66,37 @@ const selected = computed(() => allRules.find(rule => rule.id === selectedId.val
 const code = ref('')
 const codeEditor = ref<HTMLTextAreaElement | null>(null)
 const procedure = ref('prolog')
-const lintiYaml = ref('')
+type ConfigMode = 'defaults' | 'example' | 'saved' | 'custom'
+const configMode = ref<ConfigMode>('defaults')
+const exampleConfig = ref('')
+const customConfig = ref('')
+const hasCustomDraft = ref(false)
+const lintiYaml = computed(() => {
+  if (configMode.value === 'example') return exampleConfig.value
+  if (configMode.value === 'saved') return savedConfig.value
+  if (configMode.value === 'custom') return customConfig.value
+  return ''
+})
+function selectConfig(mode: ConfigMode) {
+  if (mode === 'custom' && !hasCustomDraft.value) {
+    customConfig.value = ''
+    hasCustomDraft.value = true
+  }
+  configMode.value = mode
+}
+function editConfig(event: Event) {
+  customConfig.value = (event.target as HTMLTextAreaElement).value
+  hasCustomDraft.value = true
+  configMode.value = 'custom'
+}
 const parameters = ref('')
 const variables = ref('')
 const datasourceType = ref('')
 const datasourceQuery = ref('')
 const splitNames = (text: string) => text.split(/[\s,]+/).filter(Boolean)
 // Only the context an example actually uses is shown; the rest can be added.
-type ContextField = 'config' | 'parameters' | 'variables' | 'datasource'
+type ContextField = 'parameters' | 'variables' | 'datasource'
 const contextLabels: Record<ContextField, string> = {
-  config: 'linti.yaml',
   parameters: 'Parameters',
   variables: 'Variables',
   datasource: 'Data source',
@@ -84,15 +105,9 @@ const shownContext = ref<ContextField[]>([])
 const hiddenContext = computed(() => (Object.keys(contextLabels) as ContextField[]).filter(field => !shownContext.value.includes(field)))
 function addContext(field: ContextField) {
   shownContext.value = [...shownContext.value, field]
-  if (field === 'config' && !lintiYaml.value.trim()) lintiYaml.value = selected.value.default_config
-}
-function useSavedConfig() {
-  if (!shownContext.value.includes('config')) shownContext.value = [...shownContext.value, 'config']
-  lintiYaml.value = savedConfig.value
 }
 function removeContext(field: ContextField) {
   shownContext.value = shownContext.value.filter(item => item !== field)
-  if (field === 'config') lintiYaml.value = ''
   if (field === 'parameters') parameters.value = ''
   if (field === 'variables') variables.value = ''
   if (field === 'datasource') datasourceType.value = datasourceQuery.value = ''
@@ -124,13 +139,15 @@ function finish() {
 function chooseExample(example?: Example) {
   code.value = example?.code || 'nValue=1;'
   procedure.value = example?.procedure || 'prolog'
-  lintiYaml.value = example?.config || ''
+  exampleConfig.value = example?.config || ''
+  if (configMode.value === 'defaults' || configMode.value === 'example') {
+    configMode.value = exampleConfig.value ? 'example' : 'defaults'
+  }
   parameters.value = example?.parameters.join(', ') || ''
   variables.value = example?.variables.join(', ') || ''
   datasourceType.value = example?.datasource_type || ''
   datasourceQuery.value = example?.datasource_query || ''
   shownContext.value = (Object.keys(contextLabels) as ContextField[]).filter(field => ({
-    config: lintiYaml.value,
     parameters: parameters.value,
     variables: variables.value,
     datasource: datasourceType.value || datasourceQuery.value,
@@ -303,6 +320,39 @@ onBeforeUnmount(resetWorker)
         <USelect id="procedure" v-model="procedure" :items="procedureItems" size="lg" class="w-44 max-w-full" :ui="fieldUi" />
         <label class="field-label" for="ti-code">TI code</label>
         <textarea id="ti-code" ref="codeEditor" v-model="code" class="code-editor" spellcheck="false" rows="10" aria-label="TI code" />
+        <section class="run-config" aria-label="Configuration for this run">
+          <h4>Configuration for this run</h4>
+          <div class="config-choices">
+            <button type="button" :class="{ active: configMode === 'defaults' }" :aria-pressed="configMode === 'defaults'" @click="selectConfig('defaults')">LinTi defaults</button>
+            <button v-if="exampleConfig.trim()" type="button" :class="{ active: configMode === 'example' }" :aria-pressed="configMode === 'example'" @click="selectConfig('example')">Example settings</button>
+            <button v-if="savedConfig.trim()" type="button" :class="{ active: configMode === 'saved' }" :aria-pressed="configMode === 'saved'" @click="selectConfig('saved')">My linti.yaml</button>
+            <button type="button" :class="{ active: configMode === 'custom' }" :aria-pressed="configMode === 'custom'" @click="selectConfig('custom')">Custom YAML</button>
+          </div>
+          <p v-if="configMode === 'defaults'" class="muted">No linti.yaml is passed to LinTi. This rule is selected for the example.</p>
+          <p v-else-if="configMode === 'example'" class="muted">This example needs these settings to demonstrate the rule.</p>
+          <p v-else-if="configMode === 'saved'" class="muted">Using the linti.yaml saved in your browser by the configurator. Editing below creates a separate draft.</p>
+          <p v-else class="muted">Paste or edit YAML for this example. An empty field uses LinTi defaults; your saved linti.yaml is unchanged.</p>
+          <details v-if="configMode === 'defaults' && selected.default_config" class="default-values">
+            <summary>View this rule's default values</summary>
+            <pre><code>{{ selected.default_config }}</code></pre>
+          </details>
+          <template v-if="configMode !== 'defaults'">
+            <label class="field-label" for="run-config-yaml">linti.yaml used for this run</label>
+            <textarea
+              id="run-config-yaml"
+              :value="lintiYaml"
+              class="code-editor"
+              spellcheck="false"
+              wrap="off"
+              placeholder="Paste your linti.yaml here…"
+              :rows="Math.max(4, lintiYaml.split('\n').length)"
+              @input="editConfig"
+            />
+          </template>
+          <UButton :to="`/config?rule=${selected.id}`" icon="i-lucide-sliders-horizontal" color="neutral" variant="link" size="sm">
+            {{ savedConfig.trim() ? 'Edit my linti.yaml' : 'Build a linti.yaml' }}
+          </UButton>
+        </section>
         <div v-if="shownContext.length" class="context">
           <p class="context-title">Runs with</p>
           <div v-for="field in shownContext" :key="field" class="context-field">
@@ -317,16 +367,7 @@ onBeforeUnmount(resetWorker)
                 @click="removeContext(field)"
               />
             </div>
-            <textarea
-              v-if="field === 'config'"
-              id="context-config"
-              v-model="lintiYaml"
-              class="code-editor"
-              spellcheck="false"
-              wrap="off"
-              :rows="Math.max(3, lintiYaml.split('\n').length)"
-            />
-            <UInput v-else-if="field === 'parameters'" id="context-parameters" v-model="parameters" placeholder="pYear, pVersion" class="w-full" :ui="fieldUi" />
+            <UInput v-if="field === 'parameters'" id="context-parameters" v-model="parameters" placeholder="pYear, pVersion" class="w-full" :ui="fieldUi" />
             <UInput v-else-if="field === 'variables'" id="context-variables" v-model="variables" placeholder="vRegion, vAmount" class="w-full" :ui="fieldUi" />
             <div v-else class="datasource-fields">
               <UInput id="context-datasource" v-model="datasourceType" placeholder="ODBC" aria-label="Data source type" :ui="fieldUi" />
@@ -334,19 +375,8 @@ onBeforeUnmount(resetWorker)
             </div>
           </div>
         </div>
-        <div v-if="hiddenContext.length || savedConfig.trim()" class="context-add">
+        <div v-if="hiddenContext.length" class="context-add">
           <span class="muted">Add:</span>
-          <UButton
-            v-if="savedConfig.trim() && lintiYaml !== savedConfig"
-            size="xs"
-            color="neutral"
-            variant="soft"
-            icon="i-lucide-file-cog"
-            title="Run this example with the linti.yaml you saved in the configurator"
-            @click="useSavedConfig()"
-          >
-            My linti.yaml
-          </UButton>
           <UButton
             v-for="field in hiddenContext"
             :key="field"
@@ -391,14 +421,6 @@ onBeforeUnmount(resetWorker)
         </section>
       </div>
 
-      <div v-if="selected.default_config" class="configuration">
-        <h3>Default configuration</h3>
-        <p class="muted">What LinTi uses for {{ selected.id }} when <code>linti.yaml</code> sets nothing. Override any of these keys in your project's <code>linti.yaml</code>.</p>
-        <pre><code>{{ selected.default_config }}</code></pre>
-        <UButton :to="`/config?rule=${selected.id}`" icon="i-lucide-sliders-horizontal" color="neutral" variant="outline" size="sm" class="mt-3">
-          Configure this rule
-        </UButton>
-      </div>
     </section>
   </div>
 </template>
@@ -424,7 +446,7 @@ onBeforeUnmount(resetWorker)
 .explanation { margin: 1.4rem 0; white-space: pre-wrap; line-height: 1.65; }
 .notice { padding: .7rem; border-left: 3px solid var(--ui-warning); background: var(--ui-bg-elevated); }
 .playground { padding: 1.2rem; border: 1px solid var(--ui-border); border-radius: .65rem; background: var(--ui-bg-elevated); }
-.playground h3, .configuration h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: .3rem; }
+.playground h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: .3rem; }
 .playground p { font-size: .9rem; }
 .example-actions { margin: 1rem 0; }
 .example-button { max-width: 100%; text-align: left; white-space: normal; }
@@ -450,8 +472,16 @@ onBeforeUnmount(resetWorker)
 .message { overflow-wrap: anywhere; }
 .meta { display: block; margin: .2rem 0 0 3.8rem; font-size: .78rem; color: var(--ui-text-muted); }
 .fixable { margin-left: .3rem; padding: 0 .4rem; border-radius: 1rem; background: color-mix(in srgb, var(--ui-success) 15%, transparent); color: var(--ui-success); }
-.configuration { margin-top: 1.8rem; }
-.configuration pre { padding: 1rem; overflow-x: auto; border-radius: .5rem; background: var(--ui-bg-elevated); }
+.run-config { margin-top: 1rem; padding: .8rem; border: 1px solid var(--ui-border-accented); border-radius: .45rem; background: var(--ui-bg); }
+.run-config h4 { font-size: .95rem; font-weight: 700; }
+.run-config .muted { margin: .45rem 0; }
+.config-choices { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .5rem; }
+.config-choices button { padding: .35rem .65rem; border: 1px solid var(--ui-border); border-radius: .4rem; font-size: .82rem; }
+.config-choices button:hover, .config-choices button.active { border-color: var(--ui-primary); }
+.config-choices button.active { color: var(--ui-primary); background: color-mix(in srgb, var(--ui-primary) 8%, var(--ui-bg)); }
+.default-values { margin: .6rem 0; font-size: .85rem; }
+.default-values summary { cursor: pointer; color: var(--ui-primary); }
+.default-values pre { margin-top: .5rem; padding: .7rem; overflow-x: auto; border-radius: .4rem; background: var(--ui-bg-elevated); }
 .empty { padding: .8rem; }
 @media (max-width: 760px) {
   .reference { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
