@@ -60,6 +60,9 @@ CellPutN(vValue, cTarget, pYear, vMonth);
   "Variables": [{"Name": "vMonth", "Type": "String"}, {"Name": "vValue", "Type": "Numeric"}],
   "HasSecurityAccess": false
 }
+
+// Keep an edited process while moving to the configurator and back.
+const draftCode = useState('linti-playground-code', () => examples.regions!.code)
 `,
   },
   yaml: {
@@ -234,7 +237,7 @@ onMounted(async () => {
   view = new EditorView({
     parent: editorHost.value!,
     state: EditorState.create({
-      doc: examples.regions!.code,
+      doc: draftCode.value,
       extensions: [
         lineNumbers(),
         highlightActiveLineGutter(),
@@ -250,7 +253,10 @@ onMounted(async () => {
           commands.indentWithTab,
         ]),
         EditorView.updateListener.of((update) => {
-          if (update.docChanged) scheduleLint()
+          if (update.docChanged) {
+            draftCode.value = update.state.doc.toString()
+            scheduleLint()
+          }
         }),
         EditorView.contentAttributes.of({ 'aria-label': 'TI process source' }),
       ],
@@ -302,7 +308,7 @@ onBeforeUnmount(() => {
             placeholder="rules:&#10;  keyword_casing:&#10;    enabled: false"
           />
           <p class="config-hint">
-            Shared with the <NuxtLink to="/config">configurator</NuxtLink>, where you can build it from a use case and download it.
+            Shared with the <NuxtLink :to="{ path: '/config', query: { from: 'playground' } }">configurator</NuxtLink>, where you can build it from a use case and download it.
             <button v-if="configText.trim()" class="link" @click="configText = ''">Clear</button>
           </p>
         </details>
