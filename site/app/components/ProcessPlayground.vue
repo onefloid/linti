@@ -61,8 +61,6 @@ CellPutN(vValue, cTarget, pYear, vMonth);
   "HasSecurityAccess": false
 }
 
-// Keep an edited process while moving to the configurator and back.
-const draftCode = useState('linti-playground-code', () => examples.regions!.code)
 `,
   },
   yaml: {
@@ -86,6 +84,9 @@ EpilogProcedure: |-
 `,
   },
 }
+
+// Keep an edited process while moving to the configurator and back.
+const draftCode = useState('linti-playground-code', () => examples.regions!.code)
 
 const formatNames: Record<Result['format'], string> = {
   ti: '.ti',
