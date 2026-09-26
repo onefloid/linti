@@ -140,8 +140,10 @@ function run(fix = false) {
   busy.value = true
   error.value = ''
   worker ||= new Worker(`${config.app.baseURL}linti-worker.js`)
-  worker.onmessage = ({ data }: MessageEvent<{ id: number, result?: Result, error?: string }>) => {
-    if (data.id !== requestId) return
+  worker.onmessage = ({ data }: MessageEvent<{ id: number, status?: 'running', result?: Result, error?: string }>) => {
+    // The worker announces when Pyodide has loaded and the lint starts; only
+    // the final reply for the latest request matters here.
+    if (data.status || data.id !== requestId) return
     busy.value = false
     loading.value = false
     if (data.error) {
@@ -171,6 +173,9 @@ function run(fix = false) {
     showDiagnostics(next.issues)
   }
   worker.onerror = (event) => {
+    // The worker script itself failed; start from scratch on the next run.
+    worker?.terminate()
+    worker = undefined
     busy.value = false
     loading.value = false
     error.value = event.message || 'The browser could not load Pyodide.'

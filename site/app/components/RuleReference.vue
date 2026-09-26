@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import rules from '../../public/rules.json'
+import rules from '../data/rules.json'
 
 type Example = {
   code: string
@@ -31,6 +31,12 @@ type Rule = {
 }
 type Finding = { rule_id: string, message: string, line: number, column: number, severity: string }
 type Result = { code: string, fixes: number, warnings: string[], issues: Finding[] }
+type WorkerReply = { id: number, status?: 'running', result?: Result, error?: string }
+
+// Upper bound for one lint run once Pyodide is loaded. Loading itself is not
+// timed: a first visit on a slow connection may legitimately take longer.
+const RUN_TIMEOUT_MS = 15_000
+const DEFAULT_RULE = 'C150'
 
 const allRules = rules as Rule[]
 const route = useRoute()
@@ -51,7 +57,9 @@ const procedureItems = [
 ]
 // 16px text on phones keeps iOS Safari from zooming in when a field gets focus.
 const fieldUi = { base: 'text-base sm:text-sm' }
-const selectedId = ref('C150')
+// Starts at the default on both server and client; the ?rule= deep link is
+// applied in onMounted so the prerendered HTML and hydration agree.
+const selectedId = ref(DEFAULT_RULE)
 const selected = computed(() => allRules.find(rule => rule.id === selectedId.value) || allRules[0]!)
 const code = ref('')
 const procedure = ref('prolog')
@@ -93,6 +101,15 @@ const filtered = computed(() => allRules.filter((rule) => {
 
 let worker: Worker | undefined
 let requestId = 0
+// The request whose reply the UI is waiting for. Replies for any other id are
+// stale (the user moved on) and are dropped.
+let pending: { id: number, fix: boolean } | undefined
+let watchdog: ReturnType<typeof setTimeout> | undefined
+
+function finish() {
+  pending = undefined
+  busy.value = false
+}
 
 function chooseExample(example?: Example) {
   code.value = example?.code || 'nValue=1;'
@@ -114,7 +131,6 @@ function chooseExample(example?: Example) {
 
 function selectRule(rule: Rule) {
   selectedId.value = rule.id
-  chooseExample(rule.examples.find(example => !example.valid) || rule.examples[0])
   void router.replace({ query: { ...route.query, rule: rule.id } })
 }
 
@@ -134,27 +150,64 @@ function applyQuery() {
 onMounted(applyQuery)
 watch(() => [route.query.rule, route.query.group], applyQuery)
 
+// Any change to what would be linted abandons the in-flight request, so its
+// result can neither be shown for the wrong rule nor overwrite edited code.
+watch([code, procedure, selectedId, lintiYaml, parameters, variables, datasourceType, datasourceQuery], () => {
+  if (pending) finish()
+})
+
+function resetWorker() {
+  clearTimeout(watchdog)
+  worker?.terminate()
+  worker = undefined
+}
+
+function onReply({ data }: MessageEvent<WorkerReply>) {
+  if (data.status === 'running') {
+    // Guards the worker, not a particular request: a hung run blocks every
+    // request queued behind it, stale or not.
+    clearTimeout(watchdog)
+    watchdog = setTimeout(() => {
+      resetWorker()
+      if (pending) {
+        finish()
+        error.value = `LinTi did not finish within ${RUN_TIMEOUT_MS / 1000} s and was stopped.`
+      }
+    }, RUN_TIMEOUT_MS)
+    return
+  }
+  clearTimeout(watchdog)
+  if (data.id !== pending?.id) return
+  const { fix } = pending
+  finish()
+  if (data.error) {
+    error.value = data.error
+  } else if (data.result) {
+    result.value = data.result
+    if (fix) code.value = data.result.code
+  }
+}
+
+function getWorker(): Worker {
+  if (!worker) {
+    worker = new Worker(`${config.app.baseURL}linti-worker.js`)
+    worker.onmessage = onReply
+    worker.onerror = (event) => {
+      // The worker script itself failed; start from scratch on the next run.
+      resetWorker()
+      finish()
+      error.value = event.message || 'The browser could not load Pyodide.'
+    }
+  }
+  return worker
+}
+
 function run(fix = false) {
   if (busy.value || !import.meta.client) return
   busy.value = true
   error.value = ''
   result.value = null
-  worker ||= new Worker(`${config.app.baseURL}linti-worker.js`)
-  const id = ++requestId
-  worker.onmessage = ({ data }: MessageEvent<{ id: number, result?: Result, error?: string }>) => {
-    if (data.id !== id) return
-    busy.value = false
-    if (data.error) {
-      error.value = data.error
-    } else if (data.result) {
-      result.value = data.result
-      if (fix) code.value = data.result.code
-    }
-  }
-  worker.onerror = (event) => {
-    busy.value = false
-    error.value = event.message || 'The browser could not load Pyodide.'
-  }
+  pending = { id: ++requestId, fix }
   const context = {
     config: lintiYaml.value,
     parameters: splitNames(parameters.value),
@@ -162,10 +215,10 @@ function run(fix = false) {
     datasource_type: datasourceType.value.trim(),
     datasource_query: datasourceQuery.value.trim(),
   }
-  worker.postMessage({ id, code: code.value, procedure: procedure.value, ruleId: selected.value.id, fix, context })
+  getWorker().postMessage({ id: pending.id, code: code.value, procedure: procedure.value, ruleId: selected.value.id, fix, context })
 }
 
-onBeforeUnmount(() => worker?.terminate())
+onBeforeUnmount(resetWorker)
 </script>
 
 <template>

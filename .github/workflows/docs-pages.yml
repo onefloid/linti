@@ -6,6 +6,7 @@ on:
       - 'site/**'
       - 'src/linti/**'
       - 'scripts/export_rule_reference.py'
+      - 'pyproject.toml'
       - '.github/workflows/docs-pages.yml'
   push:
     branches: [main]
@@ -53,8 +54,15 @@ jobs:
           path: site/.output/public
 
   deploy:
+    # Pull requests only build and smoke-test the site: actions/deploy-pages has
+    # no previews, so deploying from a PR would replace the live site.
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
+    # One fixed group, never cancelled, so two deploys cannot race.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write

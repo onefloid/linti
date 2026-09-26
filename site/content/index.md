@@ -32,7 +32,7 @@ LinTi checks TM1 TurboIntegrator scripts for formatting mistakes, naming convent
 
   :::u-button
   ---
-  to: https://github.com/deutschebahn/linti
+  to: https://github.com/onefloid/linti
   target: _blank
   size: xl
   color: neutral

@@ -25,8 +25,9 @@ and `PYTHONPATH=src pytest`.
 ## Project conventions (from .github/copilot-instructions.md)
 
 - After adding a rule or changing rule metadata, regenerate docs with
-  `python scripts/generate_all_rules.py`. **Never edit `ALL_RULES.md` by hand** —
-  it is generated from each rule's `METADATA`.
+  `python scripts/generate_all_rules.py`. **Never edit `ALL_RULES.md` or
+  `site/app/data/rules.json` by hand** — both are generated from each rule's
+  `METADATA` (via `rules.rule_ids.rule_docs()`), and tests check they are current.
 - Run the full test suite after changes.
 - Update `README.md` when behavior changes, and suggest a `pyproject.toml`
   version bump after a feature or fix.
@@ -129,5 +130,6 @@ to a project root. `cli/rule_explainer.py` powers `linti explain`.
    needs context declares it on the `RuleExample` (`procedure`, `config`,
    `parameters`, `variables`, `datasource_type`/`datasource_query`); run one by
    hand with `linti.rules.examples.run_example`.
-3. Run `python scripts/generate_all_rules.py` to refresh `ALL_RULES.md`.
+3. Run `python scripts/generate_all_rules.py` to refresh `ALL_RULES.md` and
+   `site/app/data/rules.json`.
 4. Update `README.md` if user-facing, and bump the version in `pyproject.toml`.
