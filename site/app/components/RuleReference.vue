@@ -93,6 +93,20 @@ const parameters = ref('')
 const variables = ref('')
 const datasourceType = ref('')
 const datasourceQuery = ref('')
+type RuleDraft = {
+  ruleId: string
+  code: string
+  procedure: string
+  parameters: string
+  variables: string
+  datasourceType: string
+  datasourceQuery: string
+  configMode: ConfigMode
+  customConfig: string
+  hasCustomDraft: boolean
+  exampleConfig: string
+}
+const draft = useState<RuleDraft | null>('linti-rule-reference-draft', () => null)
 const splitNames = (text: string) => text.split(/[\s,]+/).filter(Boolean)
 // Only the context an example actually uses is shown; the rest can be added.
 type ContextField = 'parameters' | 'variables' | 'datasource'
@@ -172,9 +186,30 @@ function applyQuery() {
   }
   const id = String(route.query.rule || '').toUpperCase()
   if (allRules.some(rule => rule.id === id)) selectedId.value = id
+  if (route.query.config === 'saved' && savedConfig.value.trim()) configMode.value = 'saved'
 }
 
-onMounted(applyQuery)
+onMounted(async () => {
+  applyQuery()
+  await nextTick()
+  const previous = draft.value
+  if (!previous || previous.ruleId !== selectedId.value) return
+  code.value = previous.code
+  procedure.value = previous.procedure
+  parameters.value = previous.parameters
+  variables.value = previous.variables
+  datasourceType.value = previous.datasourceType
+  datasourceQuery.value = previous.datasourceQuery
+  exampleConfig.value = previous.exampleConfig
+  customConfig.value = previous.customConfig
+  hasCustomDraft.value = previous.hasCustomDraft
+  if (route.query.config !== 'saved') configMode.value = previous.configMode === 'saved' && !savedConfig.value.trim() ? 'defaults' : previous.configMode
+  shownContext.value = (Object.keys(contextLabels) as ContextField[]).filter(field => ({
+    parameters: parameters.value,
+    variables: variables.value,
+    datasource: datasourceType.value || datasourceQuery.value,
+  })[field])
+})
 watch(() => [route.query.rule, route.query.group], applyQuery)
 
 // Any change to what would be linted abandons the in-flight request, so its
@@ -258,7 +293,22 @@ function jumpTo(issue: Finding) {
   if (Number.isFinite(lineHeight)) editor.scrollTop = Math.max(0, (line - 2) * lineHeight)
 }
 
-onBeforeUnmount(resetWorker)
+onBeforeUnmount(() => {
+  draft.value = {
+    ruleId: selectedId.value,
+    code: code.value,
+    procedure: procedure.value,
+    parameters: parameters.value,
+    variables: variables.value,
+    datasourceType: datasourceType.value,
+    datasourceQuery: datasourceQuery.value,
+    configMode: configMode.value,
+    customConfig: customConfig.value,
+    hasCustomDraft: hasCustomDraft.value,
+    exampleConfig: exampleConfig.value,
+  }
+  resetWorker()
+})
 </script>
 
 <template>
@@ -349,7 +399,7 @@ onBeforeUnmount(resetWorker)
               @input="editConfig"
             />
           </template>
-          <UButton :to="`/config?rule=${selected.id}`" icon="i-lucide-sliders-horizontal" color="neutral" variant="link" size="sm">
+          <UButton :to="{ path: '/config', query: { from: 'rules', rule: selected.id } }" icon="i-lucide-sliders-horizontal" color="neutral" variant="link" size="sm">
             {{ savedConfig.trim() ? 'Edit my linti.yaml' : 'Build a linti.yaml' }}
           </UButton>
         </section>
