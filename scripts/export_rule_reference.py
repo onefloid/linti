@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Export the rule registry for the interactive, static documentation site.
 
+Writes the site's ``rules.json`` (the rule reference) and
+``config-schema.json`` (the configurator's form schema, defaults and presets).
 Also run by ``scripts/generate_all_rules.py``, so regenerating the rule docs
-keeps ``ALL_RULES.md`` and the site's ``rules.json`` in step.
+keeps ``ALL_RULES.md`` and both files in step.
 
 Usage:
     python scripts/export_rule_reference.py
@@ -20,10 +22,13 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from linti.config import Config  # noqa: E402
+from linti.config import _MOVED_TO_TOPLEVEL, _REMOVED_RULE_CONFIGS, Config  # noqa: E402
+from linti.config_presets import PRESETS  # noqa: E402
 from linti.rules.rule_ids import GROUP_NAMES, RuleDoc, deprecated_ids_for, rule_docs  # noqa: E402
 
-OUTPUT = Path(__file__).resolve().parent.parent / "site" / "app" / "data" / "rules.json"
+DATA_DIR = Path(__file__).resolve().parent.parent / "site" / "app" / "data"
+OUTPUT = DATA_DIR / "rules.json"
+CONFIG_OUTPUT = DATA_DIR / "config-schema.json"
 
 
 def collect_rules() -> list[dict]:
@@ -96,18 +101,58 @@ def _plain(value):
     return value
 
 
+def collect_config_schema() -> dict:
+    """Everything the configurator needs to render and validate ``linti.yaml``."""
+    return {
+        "schema": Config.model_json_schema(by_alias=True),
+        "defaults": Config().model_dump(mode="json", by_alias=True),
+        "presets": [
+            {
+                "key": preset.key,
+                "title": preset.title,
+                "description": preset.description,
+                "yaml": yaml.safe_dump(preset.settings, sort_keys=False)
+                if preset.settings
+                else "",
+            }
+            for preset in PRESETS
+        ],
+        "removed_rule_configs": _REMOVED_RULE_CONFIGS,
+        "moved_to_toplevel": {
+            rule_key: {"setting": old_key, "top_level": new_key}
+            for rule_key, (old_key, new_key) in _MOVED_TO_TOPLEVEL.items()
+        },
+    }
+
+
+def _dump(data) -> str:
+    return json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+
+
 def render_json() -> str:
-    return json.dumps(collect_rules(), ensure_ascii=False, indent=2) + "\n"
+    return _dump(collect_rules())
+
+
+def render_config_schema() -> str:
+    return _dump(collect_config_schema())
+
+
+def _outputs() -> dict[Path, str]:
+    return {OUTPUT: render_json(), CONFIG_OUTPUT: render_config_schema()}
 
 
 def is_up_to_date() -> bool:
-    return OUTPUT.exists() and OUTPUT.read_text(encoding="utf-8") == render_json()
+    return all(
+        path.exists() and path.read_text(encoding="utf-8") == content
+        for path, content in _outputs().items()
+    )
 
 
 def write() -> None:
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(render_json(), encoding="utf-8")
-    print(f"Generated {OUTPUT}")
+    for path, content in _outputs().items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        print(f"Generated {path}")
 
 
 def main() -> None:

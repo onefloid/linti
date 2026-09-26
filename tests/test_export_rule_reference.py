@@ -50,3 +50,31 @@ def test_default_config_reflects_config_defaults():
     assert "allow_loop_counter_variables: false" in rules["N110"]["default_config"]
     assert "enabled: false" in rules["C130"]["default_config"]
     assert rules["X210"]["default_config"].startswith("rules:\n  sql_where_filtering:\n    enabled: true")
+
+
+def test_checked_in_config_schema_matches_export():
+    assert (
+        export_rule_reference.CONFIG_OUTPUT.read_text(encoding="utf-8")
+        == export_rule_reference.render_config_schema()
+    )
+
+
+def test_config_schema_carries_form_metadata():
+    data = export_rule_reference.collect_config_schema()
+    schema = data["schema"]
+    # The configurator labels fields with their descriptions and reads the
+    # user-facing alias, not the internal field name.
+    assert "severity" in schema["properties"]
+    assert "min_severity" not in schema["properties"]
+    assert schema["properties"]["fail_on"]["description"]
+    secret = schema["$defs"]["HardcodedSecretConfig"]["properties"]["mode"]
+    assert secret["enum"] == ["relaxed", "standard", "strict", "custom"]
+    assert secret["description"]
+    assert data["defaults"]["rules"]["docstring_region"]["enabled"] is False
+    assert data["defaults"]["severity"] == "warning"
+    assert [preset["key"] for preset in data["presets"]][0] == "recommended"
+    assert "process_quit" in data["removed_rule_configs"]
+    assert data["moved_to_toplevel"]["docstring_region"] == {
+        "setting": "generic_prefixes",
+        "top_level": "generic_prefixes",
+    }
