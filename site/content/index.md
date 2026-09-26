@@ -8,7 +8,7 @@ description: Lint TM1 TurboIntegrator scripts with actionable findings.
 Lint your TurboIntegrator code
 
 #description
-LinTi checks TM1 TurboIntegrator scripts for formatting mistakes, naming conventions, and subtle code-quality issues. The playground and the rule reference run entirely in your browser.
+LinTi checks TM1 TurboIntegrator scripts for formatting mistakes, naming conventions, and subtle code-quality issues. The playground, the rule reference, and the configurator run entirely in your browser.
 
 #links
   :::u-button
@@ -28,6 +28,16 @@ LinTi checks TM1 TurboIntegrator scripts for formatting mistakes, naming convent
   icon: i-lucide-list-filter
   ---
   Explore the rules
+  :::
+
+  :::u-button
+  ---
+  to: /config
+  size: xl
+  variant: outline
+  icon: i-lucide-sliders-horizontal
+  ---
+  Configure LinTi
   :::
 
   :::u-button
@@ -123,4 +133,6 @@ Install the CLI
   pip install linti
   linti path/to/process.ti
   ```
+
+  Tune it for your project with the [configurator](/config): pick a use case, adjust the rules, and download the `linti.yaml` next to your processes.
 ::

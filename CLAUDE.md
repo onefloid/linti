@@ -24,10 +24,14 @@ and `PYTHONPATH=src pytest`.
 
 ## Project conventions (from .github/copilot-instructions.md)
 
-- After adding a rule or changing rule metadata, regenerate docs with
-  `python scripts/generate_all_rules.py`. **Never edit `ALL_RULES.md` or
-  `site/app/data/rules.json` by hand** — both are generated from each rule's
-  `METADATA` (via `rules.rule_ids.rule_docs()`), and tests check they are current.
+- After adding a rule or changing rule metadata or `config.py`, regenerate docs
+  with `python scripts/generate_all_rules.py`. **Never edit `ALL_RULES.md`,
+  `site/app/data/rules.json` or `site/app/data/config-schema.json` by hand**.
+  They are generated from each rule's `METADATA` (via
+  `rules.rule_ids.rule_docs()`), the pydantic `Config` model and
+  `config_presets.PRESETS`, and tests check they are current. Help text for a
+  config option belongs in its `Field(description=...)`, because the site's
+  configurator shows it.
 - Run the full test suite after changes.
 - Update `README.md` when behavior changes, and suggest a `pyproject.toml`
   version bump after a feature or fix.

@@ -92,7 +92,8 @@ const formatNames: Record<Result['format'], string> = {
 
 const config = useRuntimeConfig()
 const editorHost = ref<HTMLElement | null>(null)
-const configText = ref('')
+// The linti.yaml shared with the configurator (kept in this browser).
+const { text: configText, restored: configRestored } = useSharedConfig()
 const busy = ref(false)
 const loading = ref(true)
 const error = ref('')
@@ -287,8 +288,11 @@ onBeforeUnmount(() => {
     <div class="layout">
       <div class="editor-column">
         <div ref="editorHost" class="editor" />
-        <details class="config">
-          <summary>Configuration (<code>linti.yaml</code>)</summary>
+        <details class="config" :open="configRestored">
+          <summary>
+            Configuration (<code>linti.yaml</code>)
+            <span v-if="configText.trim()" class="badge">saved in this browser</span>
+          </summary>
           <textarea
             v-model="configText"
             class="config-editor"
@@ -297,6 +301,10 @@ onBeforeUnmount(() => {
             aria-label="linti.yaml configuration"
             placeholder="rules:&#10;  keyword_casing:&#10;    enabled: false"
           />
+          <p class="config-hint">
+            Shared with the <NuxtLink to="/config">configurator</NuxtLink>, where you can build it from a use case and download it.
+            <button v-if="configText.trim()" class="link" @click="configText = ''">Clear</button>
+          </p>
         </details>
       </div>
 
@@ -362,6 +370,10 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .editor :deep(.cm-tooltip) { background: var(--ui-bg-elevated); color: var(--ui-text); border: 1px solid var(--ui-border); }
 .config { margin-top: .8rem; }
 .config summary { cursor: pointer; font-size: .9rem; font-weight: 600; }
+.config-hint { margin-top: .4rem; font-size: .8rem; color: var(--ui-text-muted); }
+.config-hint a, .config-hint .link { color: var(--ui-primary); }
+.config-hint .link:hover { text-decoration: underline; }
+.config summary .badge { margin-left: .4rem; font-weight: 500; }
 .config-editor { width: 100%; margin-top: .5rem; resize: vertical; padding: .7rem; border-radius: .45rem; border: 1px solid var(--ui-border); background: var(--ui-bg); color: var(--ui-text); font: .82rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .results { position: sticky; top: 1.5rem; max-height: calc(100vh - 3rem); overflow-y: auto; padding: 1rem; border: 1px solid var(--ui-border); border-radius: .5rem; background: var(--ui-bg-elevated); }
 .status { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; font-size: .88rem; }

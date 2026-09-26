@@ -39,6 +39,8 @@ const RUN_TIMEOUT_MS = 15_000
 const DEFAULT_RULE = 'C150'
 
 const allRules = rules as Rule[]
+// The visitor's own linti.yaml from the configurator, if they saved one.
+const { text: savedConfig } = useSharedConfig()
 const route = useRoute()
 const router = useRouter()
 const config = useRuntimeConfig()
@@ -82,6 +84,10 @@ const hiddenContext = computed(() => (Object.keys(contextLabels) as ContextField
 function addContext(field: ContextField) {
   shownContext.value = [...shownContext.value, field]
   if (field === 'config' && !lintiYaml.value.trim()) lintiYaml.value = selected.value.default_config
+}
+function useSavedConfig() {
+  if (!shownContext.value.includes('config')) shownContext.value = [...shownContext.value, 'config']
+  lintiYaml.value = savedConfig.value
 }
 function removeContext(field: ContextField) {
   shownContext.value = shownContext.value.filter(item => item !== field)
@@ -311,8 +317,19 @@ onBeforeUnmount(resetWorker)
             </div>
           </div>
         </div>
-        <div v-if="hiddenContext.length" class="context-add">
+        <div v-if="hiddenContext.length || savedConfig.trim()" class="context-add">
           <span class="muted">Add:</span>
+          <UButton
+            v-if="savedConfig.trim() && lintiYaml !== savedConfig"
+            size="xs"
+            color="neutral"
+            variant="soft"
+            icon="i-lucide-file-cog"
+            title="Run this example with the linti.yaml you saved in the configurator"
+            @click="useSavedConfig()"
+          >
+            My linti.yaml
+          </UButton>
           <UButton
             v-for="field in hiddenContext"
             :key="field"
@@ -346,6 +363,9 @@ onBeforeUnmount(resetWorker)
         <h3>Default configuration</h3>
         <p class="muted">What LinTi uses for {{ selected.id }} when <code>linti.yaml</code> sets nothing. Override any of these keys in your project's <code>linti.yaml</code>.</p>
         <pre><code>{{ selected.default_config }}</code></pre>
+        <UButton :to="`/config?rule=${selected.id}`" icon="i-lucide-sliders-horizontal" color="neutral" variant="outline" size="sm" class="mt-3">
+          Configure this rule
+        </UButton>
       </div>
     </section>
   </div>

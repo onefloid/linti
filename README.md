@@ -32,6 +32,9 @@ It is not affiliated with, endorsed by, sponsored by, or maintained by IBM. TM1,
 * Browser playground: paste a whole process, lint it and apply auto-fixes
   without installing anything — it runs locally via Pyodide
   (<https://onefloid.github.io/linti/playground>, built from `site/`)
+* Config configurator: build a `linti.yaml` from a use case (recommended,
+  strict CI gate, PA v12 migration), fine-tune it in a form or as YAML, and
+  download it (<https://onefloid.github.io/linti/config>)
 
 ## Supported Input Formats
 
