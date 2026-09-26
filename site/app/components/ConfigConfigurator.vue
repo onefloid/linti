@@ -4,6 +4,16 @@ import type { AnnotationType } from '@codemirror/state'
 
 const route = useRoute()
 const { text: sharedText } = useSharedConfig()
+const origin = computed(() => route.query.from === 'rules' || route.query.from === 'playground' ? route.query.from : null)
+const originRule = computed(() => {
+  const id = String(route.query.rule || '').toUpperCase()
+  return ruleCards.some(card => card.rules.some(rule => rule.id === id)) ? id : null
+})
+const returnLink = computed(() => origin.value === 'playground'
+  ? { to: '/playground', label: 'Back to playground' }
+  : origin.value === 'rules'
+    ? { to: originRule.value ? `/rules?rule=${encodeURIComponent(originRule.value)}&config=saved` : '/rules', label: originRule.value ? `Back to rule ${originRule.value}` : 'Back to rule reference' }
+    : null)
 
 const editorHost = ref<HTMLElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -313,6 +323,11 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="configurator">
+    <nav class="return-links" aria-label="Continue with your configuration">
+      <UButton v-if="returnLink" :to="returnLink.to" icon="i-lucide-arrow-left" color="neutral" variant="soft" size="sm">{{ returnLink.label }}</UButton>
+      <UButton v-if="origin !== 'rules'" to="/rules" icon="i-lucide-list" color="neutral" variant="ghost" size="sm">Rule reference</UButton>
+      <UButton v-if="origin !== 'playground'" to="/playground" icon="i-lucide-square-terminal" color="neutral" variant="ghost" size="sm">Try in playground</UButton>
+    </nav>
     <section class="presets" aria-label="Start from a use case">
       <button
         v-for="preset in presets"
@@ -451,6 +466,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .configurator { margin-top: 1.5rem; }
+.return-links { position: sticky; top: .5rem; z-index: 10; display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin-bottom: 1.2rem; padding: .5rem; border: 1px solid var(--ui-border); border-radius: .5rem; background: var(--ui-bg); }
 .presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem; margin-bottom: 1.4rem; }
 .preset { display: flex; flex-direction: column; gap: .3rem; padding: .9rem 1rem; text-align: left; border: 1px solid var(--ui-border); border-radius: .6rem; background: var(--ui-bg); }
 .preset:hover { border-color: var(--ui-primary); }
