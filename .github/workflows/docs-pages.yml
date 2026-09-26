@@ -54,9 +54,10 @@ jobs:
           path: site/.output/public
 
   deploy:
-    # Pull requests only build and smoke-test the site: actions/deploy-pages has
-    # no previews, so deploying from a PR would replace the live site.
-    if: github.event_name != 'pull_request'
+    # Pull requests from this repository deploy too, so a feature branch can be
+    # tried live. actions/deploy-pages has no previews: the last deploy (PR or
+    # main) is what the site shows. Fork PRs lack the Pages token and are skipped.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     needs: build
     runs-on: ubuntu-latest
     # One fixed group, never cancelled, so two deploys cannot race.
