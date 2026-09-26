@@ -13,7 +13,10 @@ export default defineNuxtConfig({
   },
   nitro: {
     prerender: {
-      routes: ['/rules', '/playground'],
+      routes: ['/rules', '/playground', '/config'],
+      // Deep links like /rules?rule=F110 render the same page (the query is
+      // applied in the browser), so crawling them only adds duplicate OG images.
+      ignore: [(route: string) => route.includes('?') && !route.includes('_payload.json')],
     },
   },
 })
