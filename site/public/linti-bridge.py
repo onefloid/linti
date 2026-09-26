@@ -68,6 +68,7 @@ def run_linti(source, procedure, rule_id, apply_fix, context_json="{}"):
                     "line": issue.line,
                     "column": issue.column,
                     "severity": issue.severity.value,
+                    "fixable": issue.fix is not None,
                 }
                 for _, issue, _ in issues
             ],
