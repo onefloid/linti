@@ -29,7 +29,7 @@ type Rule = {
   previous_ids: string[]
   examples: Example[]
 }
-type Finding = { rule_id: string, message: string, line: number, column: number, severity: string }
+type Finding = { rule_id: string, message: string, line: number, column: number, severity: 'error' | 'warning', fixable: boolean }
 type Result = { code: string, fixes: number, warnings: string[], issues: Finding[] }
 type WorkerReply = { id: number, status?: 'running', result?: Result, error?: string }
 
@@ -64,6 +64,7 @@ const fieldUi = { base: 'text-base sm:text-sm' }
 const selectedId = ref(DEFAULT_RULE)
 const selected = computed(() => allRules.find(rule => rule.id === selectedId.value) || allRules[0]!)
 const code = ref('')
+const codeEditor = ref<HTMLTextAreaElement | null>(null)
 const procedure = ref('prolog')
 const lintiYaml = ref('')
 const parameters = ref('')
@@ -99,6 +100,9 @@ function removeContext(field: ContextField) {
 const busy = ref(false)
 const error = ref('')
 const result = ref<Result | null>(null)
+const errorCount = computed(() => result.value?.issues.filter(issue => issue.severity === 'error').length ?? 0)
+const warningCount = computed(() => (result.value?.issues.length ?? 0) - errorCount.value)
+const fixableCount = computed(() => result.value?.issues.filter(issue => issue.fixable).length ?? 0)
 const filtered = computed(() => allRules.filter((rule) => {
   if (group.value !== 'all' && rule.group !== group.value) return false
   const text = `${rule.id} ${rule.name} ${rule.description} ${rule.explanation}`.toLowerCase()
@@ -224,6 +228,19 @@ function run(fix = false) {
   getWorker().postMessage({ id: pending.id, code: code.value, procedure: procedure.value, ruleId: selected.value.id, fix, context })
 }
 
+function jumpTo(issue: Finding) {
+  const editor = codeEditor.value
+  if (!editor) return
+  const lines = code.value.split('\n')
+  const line = Math.min(Math.max(issue.line, 1), lines.length)
+  const offset = lines.slice(0, line - 1).reduce((total, text) => total + text.length + 1, 0)
+  const position = offset + Math.min(Math.max(issue.column - 1, 0), lines[line - 1]!.length)
+  editor.focus()
+  editor.setSelectionRange(position, position)
+  const lineHeight = Number.parseFloat(getComputedStyle(editor).lineHeight)
+  if (Number.isFinite(lineHeight)) editor.scrollTop = Math.max(0, (line - 2) * lineHeight)
+}
+
 onBeforeUnmount(resetWorker)
 </script>
 
@@ -285,7 +302,7 @@ onBeforeUnmount(resetWorker)
         <label class="field-label" for="procedure">TI procedure</label>
         <USelect id="procedure" v-model="procedure" :items="procedureItems" size="lg" class="w-44 max-w-full" :ui="fieldUi" />
         <label class="field-label" for="ti-code">TI code</label>
-        <textarea id="ti-code" v-model="code" class="code-editor" spellcheck="false" rows="10" aria-label="TI code" />
+        <textarea id="ti-code" ref="codeEditor" v-model="code" class="code-editor" spellcheck="false" rows="10" aria-label="TI code" />
         <div v-if="shownContext.length" class="context">
           <p class="context-title">Runs with</p>
           <div v-for="field in shownContext" :key="field" class="context-field">
@@ -347,16 +364,31 @@ onBeforeUnmount(resetWorker)
           <UButton v-if="selected.auto_fix" icon="i-lucide-wand-sparkles" color="neutral" variant="outline" :disabled="busy" @click="run(true)">Apply auto-fix</UButton>
         </div>
         <p v-if="error" role="alert" class="error">{{ error }}</p>
-        <div v-if="result" class="findings" aria-live="polite">
-          <p v-for="(warning, index) in result.warnings" :key="`w${index}`" class="notice">{{ warning }}</p>
+        <section v-if="result" class="findings" aria-live="polite" aria-label="Findings">
+          <p class="summary">
+            <strong>{{ result.issues.length }}</strong> finding{{ result.issues.length === 1 ? '' : 's' }}
+            <span v-if="result.issues.length" class="muted">
+              · {{ errorCount }} error{{ errorCount === 1 ? '' : 's' }}, {{ warningCount }} warning{{ warningCount === 1 ? '' : 's' }}, {{ fixableCount }} auto-fixable
+            </span>
+          </p>
           <p v-if="result.fixes" class="success">Applied {{ result.fixes }} fix{{ result.fixes === 1 ? '' : 'es' }}.</p>
-          <p v-if="!result.issues.length" class="success">No findings for {{ selected.id }}.</p>
-          <ul v-else>
-            <li v-for="(issue, index) in result.issues" :key="index">
-              <code>{{ issue.rule_id }}</code> · {{ issue.severity }} · {{ issue.line }}:{{ issue.column }} — {{ issue.message }}
-            </li>
+          <ul v-if="result.warnings.length" class="warnings">
+            <li v-for="(warning, index) in result.warnings" :key="index">{{ warning }}</li>
           </ul>
-        </div>
+          <p v-if="!result.issues.length" class="success">No findings for {{ selected.id }}. 🎉</p>
+          <ol v-else class="issues">
+            <li v-for="(issue, index) in result.issues" :key="index" :class="`severity-${issue.severity}`">
+              <button class="issue" :aria-label="`Line ${issue.line}, column ${issue.column}: ${issue.message}`" @click="jumpTo(issue)">
+                <span class="location">{{ issue.line }}:{{ issue.column }}</span>
+                <span class="message">{{ issue.message }}</span>
+              </button>
+              <span class="meta">
+                <code>{{ issue.rule_id }}</code> · {{ procedure }}
+                <span v-if="issue.fixable" class="fixable">auto-fix</span>
+              </span>
+            </li>
+          </ol>
+        </section>
       </div>
 
       <div v-if="selected.default_config" class="configuration">
@@ -406,8 +438,18 @@ onBeforeUnmount(resetWorker)
 .context-add { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-top: .7rem; }
 .error { color: var(--ui-error); overflow-wrap: anywhere; }
 .success { color: var(--ui-success); }
-.findings { margin-top: 1rem; }
-.findings li { margin: .35rem 0; }
+.findings { margin-top: 1rem; padding: 1rem; border: 1px solid var(--ui-border); border-radius: .5rem; background: var(--ui-bg); }
+.summary { margin: .6rem 0; }
+.warnings { margin: .5rem 0; padding: .6rem .8rem; border-left: 3px solid var(--ui-warning); font-size: .85rem; }
+.issues { list-style: none; padding: 0; margin: 0; }
+.issues li { padding: .5rem .2rem .5rem .6rem; border-bottom: 1px solid var(--ui-border); border-left: 3px solid var(--ui-error); }
+.issues li.severity-warning { border-left-color: var(--ui-warning); }
+.issue { display: flex; gap: .6rem; width: 100%; text-align: left; font-size: .88rem; }
+.issue:hover .message { text-decoration: underline; }
+.location { flex: none; min-width: 3.2rem; color: var(--ui-text-muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .8rem; padding-top: .1rem; }
+.message { overflow-wrap: anywhere; }
+.meta { display: block; margin: .2rem 0 0 3.8rem; font-size: .78rem; color: var(--ui-text-muted); }
+.fixable { margin-left: .3rem; padding: 0 .4rem; border-radius: 1rem; background: color-mix(in srgb, var(--ui-success) 15%, transparent); color: var(--ui-success); }
 .configuration { margin-top: 1.8rem; }
 .configuration pre { padding: 1rem; overflow-x: auto; border-radius: .5rem; background: var(--ui-bg-elevated); }
 .empty { padding: .8rem; }
