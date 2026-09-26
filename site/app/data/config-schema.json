@@ -100,7 +100,8 @@
               "type": "string"
             },
             "title": "Generic Prefixes",
-            "type": "array"
+            "type": "array",
+            "x-hidden": true
           },
           "generic_extra_headers": {
             "description": "Additional headers required in generic processes.",
@@ -219,7 +220,8 @@
             ],
             "default": null,
             "description": "The same override in the top-level vocabulary; `mode` wins if both are set.",
-            "title": "Target Version"
+            "title": "Target Version",
+            "x-hidden": true
           }
         },
         "title": "FunctionVersionCompatibilityConfig",

@@ -268,6 +268,8 @@ class FunctionVersionCompatibilityConfig(RuleConfig):
         description=(
             "The same override in the top-level vocabulary; `mode` wins if both are set."
         ),
+        # Accepted, but forms offer `mode` (or the top-level key) instead.
+        json_schema_extra={"x-hidden": True},
     )
 
 
@@ -290,6 +292,7 @@ class DocstringRegionConfig(RuleConfig):
     generic_prefixes: list[str] = Field(
         default_factory=list,
         description="Deprecated: use the top-level `generic_prefixes` instead.",
+        json_schema_extra={"x-hidden": True},
     )
     generic_extra_headers: list[str] = Field(
         default_factory=lambda: ["# Use Case"],
