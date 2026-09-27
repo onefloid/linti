@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "dev": "nuxt dev",
-    "generate": "nuxt generate"
+    "generate": "nuxt generate",
+    "test:unit": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",

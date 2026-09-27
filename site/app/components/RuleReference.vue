@@ -39,8 +39,7 @@ const RUN_TIMEOUT_MS = 15_000
 const DEFAULT_RULE = 'C150'
 
 const allRules = rules as Rule[]
-// The visitor's own linti.yaml from the configurator, if they saved one.
-const { text: savedConfig } = useSharedConfig()
+const configs = useConfigLibrary()
 const route = useRoute()
 const router = useRouter()
 const config = useRuntimeConfig()
@@ -66,28 +65,32 @@ const selected = computed(() => allRules.find(rule => rule.id === selectedId.val
 const code = ref('')
 const codeEditor = ref<HTMLTextAreaElement | null>(null)
 const procedure = ref('prolog')
-type ConfigMode = 'defaults' | 'example' | 'saved' | 'custom'
+type ConfigMode = 'defaults' | 'example' | 'working' | 'profile'
 const configMode = ref<ConfigMode>('defaults')
 const exampleConfig = ref('')
-const customConfig = ref('')
-const hasCustomDraft = ref(false)
+const profileId = ref<string | null>(null)
+const chosenProfile = computed(() => configs.library.value.profiles.find(profile => profile.id === profileId.value) ?? null)
 const lintiYaml = computed(() => {
   if (configMode.value === 'example') return exampleConfig.value
-  if (configMode.value === 'saved') return savedConfig.value
-  if (configMode.value === 'custom') return customConfig.value
+  if (configMode.value === 'working') return configs.yaml.value
+  if (configMode.value === 'profile') return chosenProfile.value?.yaml ?? ''
   return ''
 })
 function selectConfig(mode: ConfigMode) {
-  if (mode === 'custom' && !hasCustomDraft.value) {
-    customConfig.value = ''
-    hasCustomDraft.value = true
-  }
   configMode.value = mode
 }
-function editConfig(event: Event) {
-  customConfig.value = (event.target as HTMLTextAreaElement).value
-  hasCustomDraft.value = true
-  configMode.value = 'custom'
+function chooseProfile(event: Event) {
+  profileId.value = (event.target as HTMLSelectElement).value
+  configMode.value = 'profile'
+}
+function editVariant() {
+  if (configs.dirty.value && lintiYaml.value !== configs.yaml.value
+    && !confirm('Replace the current unsaved draft with this rule variant?')) return
+  configs.startDraft(`${selected.value.id} variant`, lintiYaml.value || presetText(presets[0]!))
+  void navigateTo({ path: '/config', query: { from: 'rules', rule: selected.value.id } })
+}
+function saveVariant() {
+  void navigateTo({ path: '/config', query: { from: 'rules', rule: selected.value.id, save: '1' } })
 }
 const parameters = ref('')
 const variables = ref('')
@@ -102,8 +105,7 @@ type RuleDraft = {
   datasourceType: string
   datasourceQuery: string
   configMode: ConfigMode
-  customConfig: string
-  hasCustomDraft: boolean
+  profileId: string | null
   exampleConfig: string
 }
 const draft = useState<RuleDraft | null>('linti-rule-reference-draft', () => null)
@@ -186,7 +188,7 @@ function applyQuery() {
   }
   const id = String(route.query.rule || '').toUpperCase()
   if (allRules.some(rule => rule.id === id)) selectedId.value = id
-  if (route.query.config === 'saved' && savedConfig.value.trim()) configMode.value = 'saved'
+  if (route.query.config === 'working') configMode.value = 'working'
 }
 
 onMounted(async () => {
@@ -201,9 +203,8 @@ onMounted(async () => {
   datasourceType.value = previous.datasourceType
   datasourceQuery.value = previous.datasourceQuery
   exampleConfig.value = previous.exampleConfig
-  customConfig.value = previous.customConfig
-  hasCustomDraft.value = previous.hasCustomDraft
-  if (route.query.config !== 'saved') configMode.value = previous.configMode === 'saved' && !savedConfig.value.trim() ? 'defaults' : previous.configMode
+  profileId.value = previous.profileId
+  if (route.query.config !== 'working') configMode.value = previous.configMode === 'profile' && !chosenProfile.value ? 'defaults' : previous.configMode
   shownContext.value = (Object.keys(contextLabels) as ContextField[]).filter(field => ({
     parameters: parameters.value,
     variables: variables.value,
@@ -303,8 +304,7 @@ onBeforeUnmount(() => {
     datasourceType: datasourceType.value,
     datasourceQuery: datasourceQuery.value,
     configMode: configMode.value,
-    customConfig: customConfig.value,
-    hasCustomDraft: hasCustomDraft.value,
+    profileId: profileId.value,
     exampleConfig: exampleConfig.value,
   }
   resetWorker()
@@ -375,33 +375,28 @@ onBeforeUnmount(() => {
           <div class="config-choices">
             <button type="button" :class="{ active: configMode === 'defaults' }" :aria-pressed="configMode === 'defaults'" @click="selectConfig('defaults')">LinTi defaults</button>
             <button v-if="exampleConfig.trim()" type="button" :class="{ active: configMode === 'example' }" :aria-pressed="configMode === 'example'" @click="selectConfig('example')">Example settings</button>
-            <button v-if="savedConfig.trim()" type="button" :class="{ active: configMode === 'saved' }" :aria-pressed="configMode === 'saved'" @click="selectConfig('saved')">My linti.yaml</button>
-            <button type="button" :class="{ active: configMode === 'custom' }" :aria-pressed="configMode === 'custom'" @click="selectConfig('custom')">Custom YAML</button>
+            <button v-if="configs.status.value !== 'defaults'" type="button" :class="{ active: configMode === 'working' }" :aria-pressed="configMode === 'working'" @click="selectConfig('working')">{{ configs.status.value === 'draft' ? 'Local draft' : configs.label.value }}</button>
+            <select v-if="configs.library.value.profiles.length" :value="configMode === 'profile' ? profileId ?? '' : ''" aria-label="Select saved configuration" @change="chooseProfile">
+              <option value="" disabled>Saved configurations…</option>
+              <option v-for="profile in configs.library.value.profiles" :key="profile.id" :value="profile.id">{{ profile.name }}</option>
+            </select>
           </div>
           <p v-if="configMode === 'defaults'" class="muted">No linti.yaml is passed to LinTi. This rule is selected for the example.</p>
           <p v-else-if="configMode === 'example'" class="muted">This example needs these settings to demonstrate the rule.</p>
-          <p v-else-if="configMode === 'saved'" class="muted">Using the linti.yaml saved in your browser by the configurator. Editing below creates a separate draft.</p>
-          <p v-else class="muted">Paste or edit YAML for this example. An empty field uses LinTi defaults; your saved linti.yaml is unchanged.</p>
+          <p v-else-if="configMode === 'working'" class="muted">Using {{ configs.label.value }}{{ configs.status.value === 'draft' ? ' (unsaved local draft)' : ' (saved in this browser)' }}.</p>
+          <p v-else class="muted">Using {{ chosenProfile?.name }} saved in this browser.</p>
           <details v-if="configMode === 'defaults' && selected.default_config" class="default-values">
             <summary>View this rule's default values</summary>
             <pre><code>{{ selected.default_config }}</code></pre>
           </details>
-          <template v-if="configMode !== 'defaults'">
-            <label class="field-label" for="run-config-yaml">linti.yaml used for this run</label>
-            <textarea
-              id="run-config-yaml"
-              :value="lintiYaml"
-              class="code-editor"
-              spellcheck="false"
-              wrap="off"
-              placeholder="Paste your linti.yaml here…"
-              :rows="Math.max(4, lintiYaml.split('\n').length)"
-              @input="editConfig"
-            />
-          </template>
-          <UButton :to="{ path: '/config', query: { from: 'rules', rule: selected.id } }" icon="i-lucide-sliders-horizontal" color="neutral" variant="link" size="sm">
-            {{ savedConfig.trim() ? 'Edit my linti.yaml' : 'Build a linti.yaml' }}
-          </UButton>
+          <details v-if="configMode !== 'defaults'" class="default-values">
+            <summary>View YAML used for this run</summary>
+            <pre><code>{{ lintiYaml }}</code></pre>
+          </details>
+          <div class="config-links">
+            <UButton icon="i-lucide-sliders-horizontal" color="neutral" variant="outline" size="sm" @click="editVariant()">Try a variant in configurator</UButton>
+            <UButton v-if="configMode === 'working' && configs.status.value === 'draft'" icon="i-lucide-save" color="neutral" variant="link" size="sm" @click="saveVariant()">Save this variant</UButton>
+          </div>
         </section>
         <div v-if="shownContext.length" class="context">
           <p class="context-title">Runs with</p>
@@ -529,6 +524,8 @@ onBeforeUnmount(() => {
 .config-choices button { padding: .35rem .65rem; border: 1px solid var(--ui-border); border-radius: .4rem; font-size: .82rem; }
 .config-choices button:hover, .config-choices button.active { border-color: var(--ui-primary); }
 .config-choices button.active { color: var(--ui-primary); background: color-mix(in srgb, var(--ui-primary) 8%, var(--ui-bg)); }
+.config-choices select { padding: .35rem .65rem; border: 1px solid var(--ui-border); border-radius: .4rem; color: var(--ui-text); background: var(--ui-bg); font-size: .82rem; }
+.config-links { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: .5rem; }
 .default-values { margin: .6rem 0; font-size: .85rem; }
 .default-values summary { cursor: pointer; color: var(--ui-primary); }
 .default-values pre { margin-top: .5rem; padding: .7rem; overflow-x: auto; border-radius: .4rem; background: var(--ui-bg-elevated); }

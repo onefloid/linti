@@ -3,7 +3,7 @@ import type { EditorView } from '@codemirror/view'
 import type { AnnotationType } from '@codemirror/state'
 
 const route = useRoute()
-const { text: sharedText } = useSharedConfig()
+const configs = useConfigLibrary()
 const origin = computed(() => route.query.from === 'rules' || route.query.from === 'playground' ? route.query.from : null)
 const originRule = computed(() => {
   const id = String(route.query.rule || '').toUpperCase()
@@ -12,7 +12,7 @@ const originRule = computed(() => {
 const returnLink = computed(() => origin.value === 'playground'
   ? { to: '/playground', label: 'Back to playground' }
   : origin.value === 'rules'
-    ? { to: originRule.value ? `/rules?rule=${encodeURIComponent(originRule.value)}&config=saved` : '/rules', label: originRule.value ? `Back to rule ${originRule.value}` : 'Back to rule reference' }
+    ? { to: originRule.value ? `/rules?rule=${encodeURIComponent(originRule.value)}&config=working` : '/rules?config=working', label: originRule.value ? `Back to rule ${originRule.value}` : 'Back to rule reference' }
     : null)
 
 const editorHost = ref<HTMLElement | null>(null)
@@ -26,7 +26,13 @@ const highlighted = ref('')
 const openCards = ref(new Set<string>())
 const mobilePane = ref<'form' | 'yaml'>('form')
 const copied = ref('')
-const undoPresetText = ref<string | null>(null)
+const profileName = ref('')
+const nameInput = ref<HTMLInputElement | null>(null)
+const profileError = ref('')
+const pendingSwitch = shallowRef<(() => void) | null>(null)
+const libraryInput = ref<HTMLInputElement | null>(null)
+const shareError = ref('')
+const hasUnsavedChanges = computed(() => configs.dirty.value || profileName.value.trim() !== (configs.activeProfile.value?.name ?? configs.library.value.draft.name))
 
 let view: EditorView | undefined
 let setDiagnostics: typeof import('@codemirror/lint').setDiagnostics | undefined
@@ -62,7 +68,7 @@ const groups = computed(() => {
 })
 
 function currentText() {
-  return view?.state.doc.toString() ?? sharedText.value
+  return view?.state.doc.toString() ?? configs.yaml.value
 }
 
 function valueOf(field: FieldSpec) {
@@ -144,11 +150,10 @@ function pushDiagnostics() {
 function syncFromEditor() {
   clearTimeout(parseTimer)
   parseTimer = undefined
-  undoPresetText.value = null
   const text = currentText()
   yamlText.value = text
   parsed.value = parseConfig(text)
-  sharedText.value = text
+  configs.yaml.value = text
   pushDiagnostics()
 }
 
@@ -162,7 +167,7 @@ function applyText(text: string) {
   }
   yamlText.value = text
   parsed.value = parseConfig(text)
-  sharedText.value = text
+  configs.yaml.value = text
   pushDiagnostics()
 }
 
@@ -170,35 +175,95 @@ function updateField(field: FieldSpec, value: unknown) {
   // Typing in the YAML that is still waiting for its debounce comes first.
   if (parseTimer) syncFromEditor()
   if (locked.value) return
-  undoPresetText.value = null
   const { doc } = parsed.value
   setOption(doc, field.path, value, field.default)
   applyText(stringifyConfig(doc))
 }
 
-function hasOwnContent() {
-  const text = currentText()
-  return !!text.trim() && !presets.some(preset => presetText(preset) === text)
+function askBeforeSwitch(action: () => void) {
+  if (parseTimer) syncFromEditor()
+  if (hasUnsavedChanges.value) pendingSwitch.value = action
+  else action()
+}
+
+function setWorking(yaml: string) {
+  applyText(yaml)
+  profileName.value = configs.activeProfile.value?.name ?? configs.library.value.draft.name
+  profileError.value = ''
+  openCards.value = new Set(ruleCards.filter(card => cardChanged(card)).map(card => card.configKey))
 }
 
 function choosePreset(preset: Preset) {
-  const next = presetText(preset)
-  const previous = currentText()
-  if (previous === next) return
-  // A pending YAML edit must not reapply stale text after the preset switch.
-  clearTimeout(parseTimer)
-  parseTimer = undefined
-  undoPresetText.value = previous
-  applyText(next)
-  openCards.value = new Set(ruleCards.filter(card => cardChanged(card)).map(card => card.configKey))
+  if (presetText(preset) === currentText()) return
+  askBeforeSwitch(() => {
+    configs.startDraft(`${preset.title} variant`, presetText(preset))
+    setWorking(configs.yaml.value)
+  })
 }
 
-function undoPreset() {
-  if (undoPresetText.value === null) return
-  const previous = undoPresetText.value
-  undoPresetText.value = null
-  applyText(previous)
-  openCards.value = new Set(ruleCards.filter(card => cardChanged(card)).map(card => card.configKey))
+function switchProfile(id: string) {
+  if (id === 'draft') return
+  askBeforeSwitch(() => {
+    if (id === 'defaults') configs.selectDefaults()
+    else configs.selectProfile(id)
+    setWorking(configs.yaml.value)
+  })
+}
+
+function requestSwitch(event: Event) {
+  const select = event.target as HTMLSelectElement
+  const wanted = select.value
+  select.value = configs.activeProfile.value?.id ?? (configs.status.value === 'draft' ? 'draft' : 'defaults')
+  switchProfile(wanted)
+}
+
+function createVariant(fromDefaults = false) {
+  askBeforeSwitch(() => {
+    const source = fromDefaults ? presetText(presets[0]!) : currentText()
+    configs.startDraft(fromDefaults ? 'New configuration' : `${configs.label.value} copy`, source)
+    setWorking(source)
+  })
+}
+
+function saveCurrent(asNew = false): boolean {
+  if (parseTimer) syncFromEditor()
+  if (errorCount.value) {
+    profileError.value = 'Fix the YAML errors before saving.'
+    return false
+  }
+  try {
+    configs.save(profileName.value, asNew)
+    profileName.value = configs.label.value
+    profileError.value = ''
+    return true
+  } catch (error) {
+    profileError.value = (error as Error).message
+    return false
+  }
+}
+
+function saveAsNew() {
+  if (profileName.value.trim() === configs.activeProfile.value?.name) profileName.value = `${profileName.value} copy`
+  saveCurrent(true)
+}
+
+function finishSwitch(saveFirst: boolean) {
+  if (saveFirst && !saveCurrent()) return
+  if (!saveFirst) {
+    if (configs.activeProfile.value) configs.selectProfile(configs.activeProfile.value.id)
+    else configs.selectDefaults()
+    setWorking(configs.yaml.value)
+  }
+  const action = pendingSwitch.value
+  pendingSwitch.value = null
+  action?.()
+}
+
+function deleteCurrent() {
+  const profile = configs.activeProfile.value
+  if (!profile || !confirm(`Delete "${profile.name}" from this browser? Any unsaved edits to it will also be discarded.`)) return
+  configs.deleteProfile(profile.id)
+  setWorking(configs.yaml.value)
 }
 
 async function copyText(text: string, what: string) {
@@ -218,14 +283,39 @@ function download() {
   URL.revokeObjectURL(url)
 }
 
+function downloadLibrary() {
+  const backup = { version: 1, profiles: configs.library.value.profiles, draft: { yaml: '', baseId: null, name: '' } }
+  const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }))
+  const link = Object.assign(document.createElement('a'), { href: url, download: 'linti-configurations.json' })
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+async function uploadLibrary(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  profileError.value = configs.importLibrary(await file.text()) ? '' : 'This is not a LinTi configuration library.'
+}
+
+async function copyShareLink() {
+  if (parseTimer) syncFromEditor()
+  const link = shareLink(profileName.value.trim() || configs.label.value, currentText())
+  shareError.value = link ? '' : 'This configuration is too large for a link. Download its YAML instead.'
+  if (link) await copyText(link, 'link')
+}
+
 async function upload(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
   if (!file) return
-  if (hasOwnContent() && !confirm(`Replace your linti.yaml with ${file.name}?`)) return
-  undoPresetText.value = null
-  applyText(await file.text())
+  const text = await file.text()
+  askBeforeSwitch(() => {
+    configs.startDraft(file.name.replace(/\.ya?ml$/i, ''), text)
+    setWorking(text)
+  })
 }
 
 function openInPlayground() {
@@ -261,7 +351,8 @@ watch(() => route.query.rule, applyRuleQuery)
 onMounted(async () => {
   // Nothing is stored until the visitor changes something: the recommended
   // preset is what LinTi does without a linti.yaml anyway.
-  const initial = sharedText.value || presetText(presets[0]!)
+  const initial = configs.yaml.value
+  profileName.value = configs.activeProfile.value?.name ?? configs.library.value.draft.name
   yamlText.value = initial
   parsed.value = parseConfig(initial)
   openCards.value = new Set(ruleCards.filter(card => cardChanged(card)).map(card => card.configKey))
@@ -311,6 +402,12 @@ onMounted(async () => {
   })
   pushDiagnostics()
   applyRuleQuery()
+  if (route.query.save === '1') {
+    void nextTick(() => {
+      nameInput.value?.scrollIntoView({ block: 'center' })
+      nameInput.value?.focus()
+    })
+  }
 })
 
 watch(mobilePane, pane => pane === 'yaml' && nextTick(() => view?.requestMeasure()))
@@ -328,6 +425,47 @@ onBeforeUnmount(() => {
       <UButton v-if="origin !== 'rules'" to="/rules" icon="i-lucide-list" color="neutral" variant="ghost" size="sm">Rule reference</UButton>
       <UButton v-if="origin !== 'playground'" to="/playground" icon="i-lucide-square-terminal" color="neutral" variant="ghost" size="sm">Try in playground</UButton>
     </nav>
+    <section class="library-panel" aria-label="My configurations">
+      <div class="library-heading">
+        <div>
+          <h2>My configurations</h2>
+          <p class="muted">Saved only in this browser. There is no account or sync; clearing browser data removes these configurations.</p>
+        </div>
+        <span class="status-badge" :class="hasUnsavedChanges ? 'draft' : configs.status.value">{{ hasUnsavedChanges ? 'Unsaved changes' : configs.status.value === 'saved' ? 'Saved locally' : 'LinTi defaults' }}</span>
+      </div>
+      <p v-if="configs.storageError.value" class="error" role="alert">Browser storage is unavailable. Download your YAML before leaving this page.</p>
+      <div class="library-actions">
+        <label class="profile-picker">Open
+          <select :value="configs.activeProfile.value?.id ?? (configs.status.value === 'draft' ? 'draft' : 'defaults')" @change="requestSwitch">
+            <option value="defaults">LinTi defaults</option>
+            <option v-if="configs.status.value === 'draft' && !configs.activeProfile.value" value="draft">Unsaved draft</option>
+            <option v-for="profile in configs.library.value.profiles" :key="profile.id" :value="profile.id">{{ profile.name }}</option>
+          </select>
+        </label>
+        <UButton size="sm" color="neutral" variant="outline" @click="createVariant(true)">New from defaults</UButton>
+        <UButton size="sm" color="neutral" variant="outline" @click="createVariant()">Duplicate current</UButton>
+      </div>
+      <div class="library-actions">
+        <label class="profile-picker">Name
+          <input ref="nameInput" v-model="profileName" type="text" maxlength="100" placeholder="Name this configuration" aria-label="Configuration name">
+        </label>
+        <UButton size="sm" :disabled="!!errorCount" @click="saveCurrent()">{{ configs.activeProfile.value ? 'Save changes / rename' : 'Save locally' }}</UButton>
+        <UButton v-if="configs.activeProfile.value" size="sm" color="neutral" variant="outline" :disabled="!!errorCount" @click="saveAsNew()">Save as new</UButton>
+        <UButton v-if="configs.activeProfile.value" size="sm" color="error" variant="ghost" @click="deleteCurrent()">Delete</UButton>
+      </div>
+      <p v-if="profileError" class="error" role="alert">{{ profileError }}</p>
+      <div class="library-actions library-transfer">
+        <UButton size="sm" color="neutral" variant="ghost" @click="downloadLibrary()">Export saved profiles</UButton>
+        <UButton size="sm" color="neutral" variant="ghost" @click="libraryInput?.click()">Import profiles</UButton>
+        <input ref="libraryInput" type="file" accept=".json,application/json" class="sr-only" aria-label="Import configuration backup" @change="uploadLibrary">
+      </div>
+      <div v-if="pendingSwitch" class="switch-prompt" role="alert">
+        <span>There are unsaved changes. Save them before switching?</span>
+        <UButton size="xs" @click="finishSwitch(true)">Save</UButton>
+        <UButton size="xs" color="neutral" variant="outline" @click="finishSwitch(false)">Discard changes</UButton>
+        <UButton size="xs" color="neutral" variant="ghost" @click="pendingSwitch = null">Cancel</UButton>
+      </div>
+    </section>
     <section class="presets" aria-label="Start from a use case">
       <button
         v-for="preset in presets"
@@ -341,9 +479,6 @@ onBeforeUnmount(() => {
         <span class="preset-description">{{ preset.description }}</span>
       </button>
     </section>
-    <p v-if="undoPresetText !== null" class="preset-undo" role="status">
-      Preset applied. <button type="button" @click="undoPreset()">Undo and restore your previous linti.yaml</button>
-    </p>
 
     <div class="pane-switch" role="tablist" aria-label="View">
       <button role="tab" :aria-selected="mobilePane === 'form'" :class="{ active: mobilePane === 'form' }" @click="mobilePane = 'form'">Form</button>
@@ -442,10 +577,11 @@ onBeforeUnmount(() => {
           <UButton icon="i-lucide-download" size="sm" @click="download()">Download linti.yaml</UButton>
           <UButton icon="i-lucide-square-terminal" size="sm" color="neutral" variant="outline" @click="openInPlayground()">Try in playground</UButton>
           <UButton icon="i-lucide-copy" size="sm" color="neutral" variant="ghost" @click="copyText(currentText(), 'yaml')">{{ copied === 'yaml' ? 'Copied' : 'Copy' }}</UButton>
-          <UButton icon="i-lucide-link" size="sm" color="neutral" variant="ghost" @click="copyText(shareLink(currentText()), 'link')">{{ copied === 'link' ? 'Link copied' : 'Share link' }}</UButton>
+          <UButton icon="i-lucide-link" size="sm" color="neutral" variant="ghost" @click="copyShareLink()">{{ copied === 'link' ? 'Link copied' : 'Share link' }}</UButton>
           <UButton icon="i-lucide-upload" size="sm" color="neutral" variant="ghost" @click="fileInput?.click()">Open file</UButton>
           <input ref="fileInput" type="file" accept=".yaml,.yml,text/yaml" class="sr-only" aria-label="Open a linti.yaml file" @change="upload">
         </div>
+        <p v-if="shareError" class="error" role="alert">{{ shareError }}</p>
         <p class="yaml-summary" aria-live="polite">
           <span>{{ changedCount }} setting{{ changedCount === 1 ? '' : 's' }} differ{{ changedCount === 1 ? 's' : '' }} from the defaults</span>
           <span v-if="errorCount" class="error">· {{ errorCount }} error{{ errorCount === 1 ? '' : 's' }}</span>
@@ -458,7 +594,7 @@ onBeforeUnmount(() => {
             <button @click="focusIssue(issue)">{{ issue.message }}</button>
           </li>
         </ul>
-        <p class="muted">Your linti.yaml stays in this browser. It is also used by the <NuxtLink to="/playground">playground</NuxtLink>.</p>
+        <p class="muted">Editing here updates the local draft used by the <NuxtLink to="/playground">playground</NuxtLink>. Use Save locally to add it to your configurations. A share link contains this YAML and can be saved as a profile when opened.</p>
       </aside>
     </div>
   </div>
@@ -466,6 +602,18 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .configurator { margin-top: 1.5rem; }
+.library-panel { padding: 1rem; margin-bottom: 1.2rem; border: 1px solid var(--ui-border-accented); border-radius: .6rem; background: var(--ui-bg-elevated); }
+.library-heading, .library-actions, .switch-prompt { display: flex; gap: .55rem; align-items: center; flex-wrap: wrap; }
+.library-heading { justify-content: space-between; align-items: flex-start; }
+.library-heading h2 { font-size: 1.1rem; font-weight: 700; }
+.library-heading p { margin: .2rem 0 .8rem; }
+.library-actions { margin: .55rem 0; }
+.profile-picker { display: flex; flex-direction: column; gap: .2rem; font-size: .8rem; font-weight: 650; }
+.profile-picker select, .profile-picker input { min-width: 12rem; max-width: 100%; border: 1px solid var(--ui-border); border-radius: .4rem; padding: .35rem .5rem; color: var(--ui-text); background: var(--ui-bg); font-size: 1rem; }
+.status-badge { border: 1px solid var(--ui-border); border-radius: 1rem; padding: .2rem .6rem; font-size: .75rem; white-space: nowrap; }
+.status-badge.draft { border-color: var(--ui-warning); }
+.status-badge.saved { border-color: var(--ui-success); }
+.switch-prompt { padding: .6rem; border-left: 3px solid var(--ui-warning); background: var(--ui-bg); }
 .return-links { position: sticky; top: .5rem; z-index: 10; display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin-bottom: 1.2rem; padding: .5rem; border: 1px solid var(--ui-border); border-radius: .5rem; background: var(--ui-bg); }
 .presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem; margin-bottom: 1.4rem; }
 .preset { display: flex; flex-direction: column; gap: .3rem; padding: .9rem 1rem; text-align: left; border: 1px solid var(--ui-border); border-radius: .6rem; background: var(--ui-bg); }

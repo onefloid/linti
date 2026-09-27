@@ -356,22 +356,6 @@ export function validateConfig(data: Record<string, unknown>): ConfigIssue[] {
   return issues
 }
 
-/** base64url of the UTF-8 text, for `#config=` share links. */
-export function encodeShare(text: string): string {
-  let binary = ''
-  for (const byte of new TextEncoder().encode(text)) binary += String.fromCharCode(byte)
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
-export function decodeShare(value: string): string | null {
-  try {
-    const binary = atob(value.replace(/-/g, '+').replace(/_/g, '/'))
-    return new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(binary, char => char.charCodeAt(0)))
-  } catch {
-    return null
-  }
-}
-
 /** A preset's YAML with a header comment naming it. */
 export function presetText(preset: Preset): string {
   const header = `# linti.yaml – ${preset.title}\n# Settings not listed here keep LinTi's defaults.\n`

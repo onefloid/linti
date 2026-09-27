@@ -96,8 +96,8 @@ const formatNames: Record<Result['format'], string> = {
 
 const config = useRuntimeConfig()
 const editorHost = ref<HTMLElement | null>(null)
-// The linti.yaml shared with the configurator (kept in this browser).
-const { text: configText, restored: configRestored } = useSharedConfig()
+const configs = useConfigLibrary()
+const configText = configs.yaml
 const busy = ref(false)
 const loading = ref(true)
 const error = ref('')
@@ -295,22 +295,14 @@ onBeforeUnmount(() => {
     <div class="layout">
       <div class="editor-column">
         <div ref="editorHost" class="editor" />
-        <details class="config" :open="configRestored">
+        <details class="config" :open="configs.status.value !== 'defaults'">
           <summary>
-            Configuration (<code>linti.yaml</code>)
-            <span v-if="configText.trim()" class="badge">saved in this browser</span>
+            Configuration: {{ configs.label.value }}
+            <span class="badge">{{ configs.status.value === 'draft' ? 'unsaved local draft' : configs.status.value === 'saved' ? 'saved in this browser' : 'LinTi defaults' }}</span>
           </summary>
-          <textarea
-            v-model="configText"
-            class="config-editor"
-            spellcheck="false"
-            rows="8"
-            aria-label="linti.yaml configuration"
-            placeholder="rules:&#10;  keyword_casing:&#10;    enabled: false"
-          />
+          <pre class="config-editor"><code>{{ configText }}</code></pre>
           <p class="config-hint">
-            Shared with the <NuxtLink :to="{ path: '/config', query: { from: 'playground' } }">configurator</NuxtLink>, where you can build it from a use case and download it.
-            <button v-if="configText.trim()" class="link" @click="configText = ''">Clear</button>
+            Configure or save this YAML in the <NuxtLink :to="{ path: '/config', query: { from: 'playground' } }">configurator</NuxtLink>.
           </p>
         </details>
       </div>
@@ -377,11 +369,11 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .editor :deep(.cm-tooltip) { background: var(--ui-bg-elevated); color: var(--ui-text); border: 1px solid var(--ui-border); }
 .config { margin-top: .8rem; }
 .config summary { cursor: pointer; font-size: .9rem; font-weight: 600; }
+.config-editor { overflow-x: auto; max-height: 16rem; padding: .7rem; border: 1px solid var(--ui-border); border-radius: .4rem; background: var(--ui-bg); font: .82rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .config-hint { margin-top: .4rem; font-size: .8rem; color: var(--ui-text-muted); }
 .config-hint a, .config-hint .link { color: var(--ui-primary); }
 .config-hint .link:hover { text-decoration: underline; }
 .config summary .badge { margin-left: .4rem; font-weight: 500; }
-.config-editor { width: 100%; margin-top: .5rem; resize: vertical; padding: .7rem; border-radius: .45rem; border: 1px solid var(--ui-border); background: var(--ui-bg); color: var(--ui-text); font: .82rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .results { position: sticky; top: 1.5rem; max-height: calc(100vh - 3rem); overflow-y: auto; padding: 1rem; border: 1px solid var(--ui-border); border-radius: .5rem; background: var(--ui-bg-elevated); }
 .status { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; font-size: .88rem; }
 .badge { border: 1px solid var(--ui-border); border-radius: 1rem; padding: .1rem .55rem; font-size: .75rem; }
