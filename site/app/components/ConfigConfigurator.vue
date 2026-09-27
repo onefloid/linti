@@ -29,6 +29,8 @@ const copied = ref('')
 const profileName = ref('')
 const nameInput = ref<HTMLInputElement | null>(null)
 const profileError = ref('')
+const saveOpen = ref(false)
+const saveAsNewMode = ref(false)
 const pendingSwitch = shallowRef<(() => void) | null>(null)
 const libraryInput = ref<HTMLInputElement | null>(null)
 const shareError = ref('')
@@ -190,6 +192,8 @@ function setWorking(yaml: string) {
   applyText(yaml)
   profileName.value = configs.activeProfile.value?.name ?? configs.library.value.draft.name
   profileError.value = ''
+  saveOpen.value = false
+  saveAsNewMode.value = false
   openCards.value = new Set(ruleCards.filter(card => cardChanged(card)).map(card => card.configKey))
 }
 
@@ -217,10 +221,10 @@ function requestSwitch(event: Event) {
   switchProfile(wanted)
 }
 
-function createVariant(fromDefaults = false) {
+function createVariant() {
   askBeforeSwitch(() => {
-    const source = fromDefaults ? presetText(presets[0]!) : currentText()
-    configs.startDraft(fromDefaults ? 'New configuration' : `${configs.label.value} copy`, source)
+    const source = currentText()
+    configs.startDraft(`${configs.label.value} copy`, source)
     setWorking(source)
   })
 }
@@ -242,13 +246,38 @@ function saveCurrent(asNew = false): boolean {
   }
 }
 
-function saveAsNew() {
-  if (profileName.value.trim() === configs.activeProfile.value?.name) profileName.value = `${profileName.value} copy`
-  saveCurrent(true)
+function openSave(asNew = false) {
+  saveAsNewMode.value = asNew
+  profileName.value = asNew
+    ? `${configs.activeProfile.value?.name ?? configs.label.value} copy`
+    : (configs.activeProfile.value?.name ?? configs.library.value.draft.name) || 'My configuration'
+  profileError.value = ''
+  saveOpen.value = true
+  void nextTick(() => {
+    nameInput.value?.scrollIntoView({ block: 'center' })
+    nameInput.value?.focus()
+  })
+}
+
+function cancelSave() {
+  saveOpen.value = false
+  profileName.value = configs.activeProfile.value?.name ?? configs.library.value.draft.name
+  profileError.value = ''
+}
+
+function submitSave() {
+  if (!saveCurrent(saveAsNewMode.value)) return
+  saveOpen.value = false
+  const action = pendingSwitch.value
+  pendingSwitch.value = null
+  action?.()
 }
 
 function finishSwitch(saveFirst: boolean) {
-  if (saveFirst && !saveCurrent()) return
+  if (saveFirst) {
+    openSave(saveOpen.value && saveAsNewMode.value)
+    return
+  }
   if (!saveFirst) {
     if (configs.activeProfile.value) configs.selectProfile(configs.activeProfile.value.id)
     else configs.selectDefaults()
@@ -403,10 +432,7 @@ onMounted(async () => {
   pushDiagnostics()
   applyRuleQuery()
   if (route.query.save === '1') {
-    void nextTick(() => {
-      nameInput.value?.scrollIntoView({ block: 'center' })
-      nameInput.value?.focus()
-    })
+    openSave()
   }
 })
 
@@ -425,46 +451,57 @@ onBeforeUnmount(() => {
       <UButton v-if="origin !== 'rules'" to="/rules" icon="i-lucide-list" color="neutral" variant="ghost" size="sm">Rule reference</UButton>
       <UButton v-if="origin !== 'playground'" to="/playground" icon="i-lucide-square-terminal" color="neutral" variant="ghost" size="sm">Try in playground</UButton>
     </nav>
-    <section class="library-panel" aria-label="My configurations">
+    <section class="library-panel" aria-label="Current configuration">
       <div class="library-heading">
-        <div>
-          <h2>My configurations</h2>
-          <p class="muted">Saved only in this browser. There is no account or sync; clearing browser data removes these configurations.</p>
+        <div class="library-title">
+          <h2>Current configuration</h2>
+          <span class="status-badge" :class="hasUnsavedChanges ? 'draft' : configs.status.value">{{ hasUnsavedChanges ? 'Unsaved changes' : configs.status.value === 'saved' ? 'Saved in this browser' : 'LinTi defaults' }}</span>
         </div>
-        <span class="status-badge" :class="hasUnsavedChanges ? 'draft' : configs.status.value">{{ hasUnsavedChanges ? 'Unsaved changes' : configs.status.value === 'saved' ? 'Saved locally' : 'LinTi defaults' }}</span>
+        <p class="muted">{{ configs.status.value === 'defaults' ? 'Choose a preset below or adjust a rule, then save your configuration.' : 'Adjust the rules below. Save when you want to keep this version.' }}</p>
       </div>
       <p v-if="configs.storageError.value" class="error" role="alert">Browser storage is unavailable. Download your YAML before leaving this page.</p>
-      <div class="library-actions">
-        <label class="profile-picker">Open
+      <div class="library-primary" :class="{ 'with-save': hasUnsavedChanges }">
+        <label class="profile-picker">Use configuration
           <select :value="configs.activeProfile.value?.id ?? (configs.status.value === 'draft' ? 'draft' : 'defaults')" @change="requestSwitch">
             <option value="defaults">LinTi defaults</option>
-            <option v-if="configs.status.value === 'draft' && !configs.activeProfile.value" value="draft">Unsaved draft</option>
+            <option v-if="configs.status.value === 'draft' && !configs.activeProfile.value" value="draft">{{ configs.library.value.draft.name || 'Local variant' }} (draft)</option>
             <option v-for="profile in configs.library.value.profiles" :key="profile.id" :value="profile.id">{{ profile.name }}</option>
           </select>
         </label>
-        <UButton size="sm" color="neutral" variant="outline" @click="createVariant(true)">New from defaults</UButton>
-        <UButton size="sm" color="neutral" variant="outline" @click="createVariant()">Duplicate current</UButton>
+        <UButton v-if="hasUnsavedChanges" class="save-action" size="sm" :disabled="!!errorCount" @click="openSave()">{{ configs.activeProfile.value ? 'Save changes' : 'Save variant' }}</UButton>
       </div>
-      <div class="library-actions">
-        <label class="profile-picker">Name
-          <input ref="nameInput" v-model="profileName" type="text" maxlength="100" placeholder="Name this configuration" aria-label="Configuration name">
+      <p class="local-note">Only in this browser · no account or sync</p>
+      <form v-if="saveOpen" class="save-panel" @submit.prevent="submitSave()">
+        <label class="profile-picker">Name this configuration
+          <input ref="nameInput" v-model="profileName" type="text" maxlength="100" placeholder="e.g. Strict CI" aria-label="Configuration name">
         </label>
-        <UButton size="sm" :disabled="!!errorCount" @click="saveCurrent()">{{ configs.activeProfile.value ? 'Save changes / rename' : 'Save locally' }}</UButton>
-        <UButton v-if="configs.activeProfile.value" size="sm" color="neutral" variant="outline" :disabled="!!errorCount" @click="saveAsNew()">Save as new</UButton>
-        <UButton v-if="configs.activeProfile.value" size="sm" color="error" variant="ghost" @click="deleteCurrent()">Delete</UButton>
-      </div>
+        <div class="save-buttons">
+          <UButton type="submit" size="sm" :disabled="!!errorCount">Save in this browser</UButton>
+          <UButton type="button" size="sm" color="neutral" variant="ghost" @click="cancelSave()">Cancel</UButton>
+        </div>
+      </form>
       <p v-if="profileError" class="error" role="alert">{{ profileError }}</p>
-      <div class="library-actions library-transfer">
-        <UButton size="sm" color="neutral" variant="ghost" @click="downloadLibrary()">Export saved profiles</UButton>
-        <UButton size="sm" color="neutral" variant="ghost" @click="libraryInput?.click()">Import profiles</UButton>
-        <input ref="libraryInput" type="file" accept=".json,application/json" class="sr-only" aria-label="Import configuration backup" @change="uploadLibrary">
-      </div>
       <div v-if="pendingSwitch" class="switch-prompt" role="alert">
         <span>There are unsaved changes. Save them before switching?</span>
         <UButton size="xs" @click="finishSwitch(true)">Save</UButton>
         <UButton size="xs" color="neutral" variant="outline" @click="finishSwitch(false)">Discard changes</UButton>
         <UButton size="xs" color="neutral" variant="ghost" @click="pendingSwitch = null">Cancel</UButton>
       </div>
+      <details class="library-more">
+        <summary>Manage configurations</summary>
+        <p class="muted">Profiles stay in this browser only. Clearing its data removes them; export a copy to keep them elsewhere.</p>
+        <div class="library-actions">
+          <UButton size="sm" color="neutral" variant="outline" @click="createVariant()">Duplicate current</UButton>
+          <UButton v-if="configs.activeProfile.value" size="sm" color="neutral" variant="outline" @click="openSave(true)">Save as new</UButton>
+          <UButton v-if="configs.activeProfile.value" size="sm" color="neutral" variant="outline" @click="openSave()">Rename</UButton>
+          <UButton v-if="configs.activeProfile.value" size="sm" color="error" variant="ghost" @click="deleteCurrent()">Delete</UButton>
+        </div>
+        <div class="library-actions">
+          <UButton size="sm" color="neutral" variant="ghost" @click="downloadLibrary()">Export saved profiles</UButton>
+          <UButton size="sm" color="neutral" variant="ghost" @click="libraryInput?.click()">Import profiles</UButton>
+          <input ref="libraryInput" type="file" accept=".json,application/json" class="sr-only" aria-label="Import configuration backup" @change="uploadLibrary">
+        </div>
+      </details>
     </section>
     <section class="presets" aria-label="Start from a use case">
       <button
@@ -594,7 +631,7 @@ onBeforeUnmount(() => {
             <button @click="focusIssue(issue)">{{ issue.message }}</button>
           </li>
         </ul>
-        <p class="muted">Editing here updates the local draft used by the <NuxtLink to="/playground">playground</NuxtLink>. Use Save locally to add it to your configurations. A share link contains this YAML and can be saved as a profile when opened.</p>
+        <p class="muted">Edits here are used by the <NuxtLink to="/playground">playground</NuxtLink> immediately. Save them above when you want to keep this version. A share link contains this YAML and opens as a local draft.</p>
       </aside>
     </div>
   </div>
@@ -602,14 +639,21 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .configurator { margin-top: 1.5rem; }
-.library-panel { padding: 1rem; margin-bottom: 1.2rem; border: 1px solid var(--ui-border-accented); border-radius: .6rem; background: var(--ui-bg-elevated); }
-.library-heading, .library-actions, .switch-prompt { display: flex; gap: .55rem; align-items: center; flex-wrap: wrap; }
-.library-heading { justify-content: space-between; align-items: flex-start; }
-.library-heading h2 { font-size: 1.1rem; font-weight: 700; }
-.library-heading p { margin: .2rem 0 .8rem; }
+.library-panel { min-width: 0; padding: .85rem 1rem; margin-bottom: 1.2rem; border: 1px solid var(--ui-border-accented); border-radius: .6rem; background: var(--ui-bg-elevated); }
+.library-title, .library-actions, .save-buttons, .switch-prompt { display: flex; gap: .55rem; align-items: center; flex-wrap: wrap; }
+.library-title h2 { font-size: 1.1rem; font-weight: 700; }
+.library-heading p { margin: .25rem 0 .7rem; }
+.library-primary { display: grid; grid-template-columns: minmax(0, 1fr); gap: .6rem; align-items: end; }
+.library-primary.with-save { grid-template-columns: minmax(0, 1fr) auto; }
+.profile-picker { display: flex; flex-direction: column; gap: .2rem; min-width: 0; font-size: .8rem; font-weight: 650; }
+.profile-picker select, .profile-picker input { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid var(--ui-border); border-radius: .4rem; padding: .35rem .5rem; color: var(--ui-text); background: var(--ui-bg); font-size: 1rem; }
+.local-note { margin: .5rem 0 0; color: var(--ui-text-muted); font-size: .76rem; }
+.save-panel { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .6rem; align-items: end; margin-top: .75rem; padding: .75rem; border: 1px solid var(--ui-border); border-radius: .45rem; background: var(--ui-bg); }
+.save-buttons { justify-content: flex-end; }
+.library-more { margin-top: .75rem; padding-top: .6rem; border-top: 1px solid var(--ui-border); }
+.library-more summary { width: fit-content; cursor: pointer; color: var(--ui-primary); font-size: .82rem; font-weight: 600; }
+.library-more .muted { margin: .5rem 0; }
 .library-actions { margin: .55rem 0; }
-.profile-picker { display: flex; flex-direction: column; gap: .2rem; font-size: .8rem; font-weight: 650; }
-.profile-picker select, .profile-picker input { min-width: 12rem; max-width: 100%; border: 1px solid var(--ui-border); border-radius: .4rem; padding: .35rem .5rem; color: var(--ui-text); background: var(--ui-bg); font-size: 1rem; }
 .status-badge { border: 1px solid var(--ui-border); border-radius: 1rem; padding: .2rem .6rem; font-size: .75rem; white-space: nowrap; }
 .status-badge.draft { border-color: var(--ui-warning); }
 .status-badge.saved { border-color: var(--ui-success); }
@@ -621,8 +665,6 @@ onBeforeUnmount(() => {
 .preset.active { border-color: var(--ui-primary); box-shadow: inset 0 0 0 1px var(--ui-primary); background: color-mix(in srgb, var(--ui-primary) 6%, var(--ui-bg)); }
 .preset-title { font-weight: 700; }
 .preset-description { font-size: .82rem; line-height: 1.4; color: var(--ui-text-muted); }
-.preset-undo { margin: -.8rem 0 1.4rem; font-size: .85rem; color: var(--ui-text-muted); }
-.preset-undo button { color: var(--ui-primary); text-decoration: underline; }
 .pane-switch { display: none; }
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(18rem, 26rem); gap: 1.4rem; align-items: start; }
 .form { min-width: 0; border: 0; padding: 0; margin: 0; }
@@ -675,5 +717,10 @@ onBeforeUnmount(() => {
   .form-pane.hidden, .yaml-pane.hidden { display: none; }
   .yaml-pane { position: static; }
   .editor :deep(.cm-editor) { height: 60vh; font-size: 1rem; }
+}
+@media (max-width: 600px) {
+  .library-primary.with-save, .save-panel { grid-template-columns: minmax(0, 1fr); }
+  .save-action { width: 100%; justify-content: center; }
+  .save-buttons { justify-content: flex-start; }
 }
 </style>
