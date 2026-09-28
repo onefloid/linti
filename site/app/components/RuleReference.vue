@@ -367,7 +367,7 @@ onBeforeUnmount(() => {
           <details class="config-inspection">
             <summary>Configuration used: {{ configLabel }}</summary>
             <div class="config-inspection-body">
-              <p v-if="!lintiYaml.trim()" class="muted">No linti.yaml is passed to LinTi. This rule is selected for the example.</p>
+              <p v-if="!lintiYaml.trim()" class="muted">This example uses LinTi's default configuration.</p>
               <p v-else class="muted">This YAML is used for the run:</p>
               <pre v-if="lintiYaml.trim()"><code>{{ lintiYaml }}</code></pre>
               <template v-else-if="selected.default_config">
