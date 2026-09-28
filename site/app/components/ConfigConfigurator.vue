@@ -51,6 +51,9 @@ const changedCount = computed(() => allFields.filter(field => isChanged(data.val
 const errorCount = computed(() => parsed.value.parseErrors.length + issues.value.filter(issue => issue.level === 'error').length)
 const warningCount = computed(() => issues.value.filter(issue => issue.level === 'warning').length)
 const activePreset = computed(() => presets.find(preset => presetText(preset) === yamlText.value))
+const switcherValue = computed(() => configs.status.value === 'draft'
+  ? 'draft'
+  : configs.activeProfile.value ? `profile:${configs.activeProfile.value.id}` : 'defaults')
 
 const groups = computed(() => {
   const needle = query.value.toLowerCase().trim()
@@ -205,20 +208,13 @@ function choosePreset(preset: Preset) {
   })
 }
 
-function switchProfile(id: string) {
-  if (id === 'draft') return
+function switchProfile(value: string) {
+  if (value === switcherValue.value) return
   askBeforeSwitch(() => {
-    if (id === 'defaults') configs.selectDefaults()
-    else configs.selectProfile(id)
+    if (value === 'defaults') configs.selectDefaults()
+    else if (value.startsWith('profile:')) configs.selectProfile(value.slice(8))
     setWorking(configs.yaml.value)
   })
-}
-
-function requestSwitch(event: Event) {
-  const select = event.target as HTMLSelectElement
-  const wanted = select.value
-  select.value = configs.activeProfile.value?.id ?? (configs.status.value === 'draft' ? 'draft' : 'defaults')
-  switchProfile(wanted)
 }
 
 function createVariant() {
@@ -288,8 +284,8 @@ function finishSwitch(saveFirst: boolean) {
   action?.()
 }
 
-function deleteCurrent() {
-  const profile = configs.activeProfile.value
+function deleteSelected(id: string) {
+  const profile = configs.library.value.profiles.find(item => item.id === id)
   if (!profile || !confirm(`Delete "${profile.name}" from this browser? Any unsaved edits to it will also be discarded.`)) return
   configs.deleteProfile(profile.id)
   setWorking(configs.yaml.value)
@@ -461,13 +457,17 @@ onBeforeUnmount(() => {
       </div>
       <p v-if="configs.storageError.value" class="error" role="alert">Browser storage is unavailable. Download your YAML before leaving this page.</p>
       <div class="library-primary" :class="{ 'with-save': hasUnsavedChanges }">
-        <label class="profile-picker">Use configuration
-          <select :value="configs.activeProfile.value?.id ?? (configs.status.value === 'draft' ? 'draft' : 'defaults')" @change="requestSwitch">
-            <option value="defaults">LinTi defaults</option>
-            <option v-if="configs.status.value === 'draft' && !configs.activeProfile.value" value="draft">{{ configs.library.value.draft.name || 'Local variant' }} (draft)</option>
-            <option v-for="profile in configs.library.value.profiles" :key="profile.id" :value="profile.id">{{ profile.name }}</option>
-          </select>
-        </label>
+        <ConfigSwitcher
+          :model-value="switcherValue"
+          :profiles="configs.library.value.profiles"
+          :show-draft="configs.status.value === 'draft'"
+          :draft-name="configs.label.value"
+          show-add
+          show-delete
+          @update:model-value="switchProfile"
+          @add="createVariant()"
+          @delete="deleteSelected"
+        />
         <UButton v-if="hasUnsavedChanges" class="save-action" size="sm" :disabled="!!errorCount" @click="openSave()">{{ configs.activeProfile.value ? 'Save changes' : 'Save variant' }}</UButton>
       </div>
       <p class="local-note">Only in this browser · no account or sync</p>
@@ -491,10 +491,8 @@ onBeforeUnmount(() => {
         <summary>Manage configurations</summary>
         <p class="muted">Profiles stay in this browser only. Clearing its data removes them; export a copy to keep them elsewhere.</p>
         <div class="library-actions">
-          <UButton size="sm" color="neutral" variant="outline" @click="createVariant()">Duplicate current</UButton>
           <UButton v-if="configs.activeProfile.value" size="sm" color="neutral" variant="outline" @click="openSave(true)">Save as new</UButton>
           <UButton v-if="configs.activeProfile.value" size="sm" color="neutral" variant="outline" @click="openSave()">Rename</UButton>
-          <UButton v-if="configs.activeProfile.value" size="sm" color="error" variant="ghost" @click="deleteCurrent()">Delete</UButton>
         </div>
         <div class="library-actions">
           <UButton size="sm" color="neutral" variant="ghost" @click="downloadLibrary()">Export saved profiles</UButton>

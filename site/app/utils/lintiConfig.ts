@@ -250,6 +250,15 @@ export function setOption(doc: Document, path: ConfigPath, value: unknown, defau
   doc.setIn(path, value)
 }
 
+/** Edit exactly one rule option while preserving other YAML settings and comments. */
+export function setRuleOption(text: string, field: FieldSpec, value: unknown): string | null {
+  if (field.path[0] !== 'rules' || field.path.length !== 3) throw new Error('Expected a rule option')
+  const parsed = parseConfig(text)
+  if (parsed.parseErrors.length) return null
+  setOption(parsed.doc, field.path, value, field.default)
+  return stringifyConfig(parsed.doc)
+}
+
 /** Character range of the key/value at *path*, for editor diagnostics. */
 export function rangeOf(doc: Document, path: ConfigPath): { from: number, to: number } | null {
   let node: unknown = doc.contents

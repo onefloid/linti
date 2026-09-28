@@ -69,28 +69,93 @@ type ConfigMode = 'defaults' | 'example' | 'working' | 'profile'
 const configMode = ref<ConfigMode>('defaults')
 const exampleConfig = ref('')
 const profileId = ref<string | null>(null)
+const ruleEditorOpen = ref(false)
+const ruleSaveOpen = ref(false)
+const ruleSaveName = ref('')
+const ruleSaveError = ref('')
 const chosenProfile = computed(() => configs.library.value.profiles.find(profile => profile.id === profileId.value) ?? null)
+const ruleCard = computed(() => ruleCards.find(card => card.configKey === selected.value.config_key)!)
 const lintiYaml = computed(() => {
   if (configMode.value === 'example') return exampleConfig.value
   if (configMode.value === 'working') return configs.yaml.value
   if (configMode.value === 'profile') return chosenProfile.value?.yaml ?? ''
   return ''
 })
-function selectConfig(mode: ConfigMode) {
-  configMode.value = mode
+const switcherValue = computed(() => {
+  if (configMode.value === 'profile') return `profile:${profileId.value}`
+  if (configMode.value === 'example') return 'example'
+  if (configMode.value === 'working') {
+    if (configs.status.value === 'draft') return 'draft'
+    if (configs.activeProfile.value) return `profile:${configs.activeProfile.value.id}`
+  }
+  return 'defaults'
+})
+const parsedRuleConfig = computed(() => parseConfig(lintiYaml.value))
+const ruleConfigIssues = computed(() => parsedRuleConfig.value.parseErrors.length
+  ? [] : validateConfig(parsedRuleConfig.value.data).filter(issue => issue.path[0] === 'rules'
+    && (issue.path.length === 1 || issue.path[1] === ruleCard.value.configKey)))
+const ruleEditorLocked = computed(() => parsedRuleConfig.value.parseErrors.length > 0
+  || ruleConfigIssues.value.some(issue => issue.path.length <= 2 && issue.level === 'error'))
+const editableRuleFields = computed(() => ruleCard.value.fields.filter(field => !field.hidden
+  || isChanged(parsedRuleConfig.value.data, field)
+  || ruleConfigIssues.value.some(issue => issue.path.join('.') === field.path.join('.'))))
+
+function chooseConfig(value: string) {
+  ruleEditorOpen.value = false
+  ruleSaveOpen.value = false
+  if (value === 'defaults' || value === 'example') configMode.value = value
+  else if (value === 'draft') configMode.value = 'working'
+  else if (value.startsWith('profile:')) {
+    profileId.value = value.slice(8)
+    configMode.value = 'profile'
+  }
 }
-function chooseProfile(event: Event) {
-  profileId.value = (event.target as HTMLSelectElement).value
-  configMode.value = 'profile'
-}
-function editVariant() {
+
+function startRuleEdit() {
+  if (ruleEditorOpen.value) return
   if (configs.dirty.value && lintiYaml.value !== configs.yaml.value
     && !confirm('Replace the current unsaved draft with this rule variant?')) return
-  configs.startDraft(`${selected.value.id} variant`, lintiYaml.value || presetText(presets[0]!))
-  void navigateTo({ path: '/config', query: { from: 'rules', rule: selected.value.id } })
+  if (configMode.value !== 'working' || configs.status.value !== 'draft') {
+    configs.startDraft(`${selected.value.id} variant`, lintiYaml.value || presetText(presets[0]!))
+  }
+  configMode.value = 'working'
+  ruleEditorOpen.value = true
 }
-function saveVariant() {
-  void navigateTo({ path: '/config', query: { from: 'rules', rule: selected.value.id, save: '1' } })
+
+function openRuleSave() {
+  ruleSaveName.value = `${selected.value.id} variant`
+  ruleSaveError.value = ''
+  ruleSaveOpen.value = true
+}
+
+function updateRuleField(field: FieldSpec, value: unknown) {
+  if (!ruleEditorOpen.value || ruleEditorLocked.value || field.path[1] !== ruleCard.value.configKey) return
+  const next = setRuleOption(configs.yaml.value, field, value)
+  if (next !== null) configs.yaml.value = next
+}
+
+function saveRuleVariant() {
+  ruleSaveError.value = ''
+  const parsed = parseConfig(configs.yaml.value)
+  if (parsed.parseErrors.length || validateConfig(parsed.data).some(issue => issue.level === 'error')) {
+    ruleSaveError.value = 'Fix configuration errors in the full configurator before saving.'
+    return
+  }
+  try {
+    configs.save(ruleSaveName.value, true)
+    ruleSaveOpen.value = false
+  } catch (error) {
+    ruleSaveError.value = (error as Error).message
+  }
+}
+
+function deleteSelectedProfile(id: string) {
+  const profile = configs.library.value.profiles.find(item => item.id === id)
+  if (!profile || !confirm(`Delete "${profile.name}" from this browser?`)) return
+  configs.deleteProfile(id)
+  profileId.value = null
+  configMode.value = 'defaults'
+  ruleEditorOpen.value = false
 }
 const parameters = ref('')
 const variables = ref('')
@@ -153,6 +218,8 @@ function finish() {
 }
 
 function chooseExample(example?: Example) {
+  ruleEditorOpen.value = false
+  ruleSaveOpen.value = false
   code.value = example?.code || 'nValue=1;'
   procedure.value = example?.procedure || 'prolog'
   exampleConfig.value = example?.config || ''
@@ -178,6 +245,9 @@ function selectRule(rule: Rule) {
 }
 
 watch(selected, rule => chooseExample(rule.examples.find(example => !example.valid) || rule.examples[0]), { immediate: true })
+watch(chosenProfile, profile => {
+  if (configMode.value === 'profile' && !profile) configMode.value = 'defaults'
+})
 // The page is prerendered without a query string, so URL state is applied only
 // after hydration to keep the server and client markup identical.
 function applyQuery() {
@@ -372,15 +442,18 @@ onBeforeUnmount(() => {
         <textarea id="ti-code" ref="codeEditor" v-model="code" class="code-editor" spellcheck="false" rows="10" aria-label="TI code" />
         <section class="run-config" aria-label="Configuration for this run">
           <h4>Configuration for this run</h4>
-          <div class="config-choices">
-            <button type="button" :class="{ active: configMode === 'defaults' }" :aria-pressed="configMode === 'defaults'" @click="selectConfig('defaults')">LinTi defaults</button>
-            <button v-if="exampleConfig.trim()" type="button" :class="{ active: configMode === 'example' }" :aria-pressed="configMode === 'example'" @click="selectConfig('example')">Example settings</button>
-            <button v-if="configs.status.value !== 'defaults'" type="button" :class="{ active: configMode === 'working' }" :aria-pressed="configMode === 'working'" @click="selectConfig('working')">{{ configs.status.value === 'draft' ? 'Local draft' : configs.label.value }}</button>
-            <select v-if="configs.library.value.profiles.length" :value="configMode === 'profile' ? profileId ?? '' : ''" aria-label="Select saved configuration" @change="chooseProfile">
-              <option value="" disabled>Saved configurations…</option>
-              <option v-for="profile in configs.library.value.profiles" :key="profile.id" :value="profile.id">{{ profile.name }}</option>
-            </select>
-          </div>
+          <ConfigSwitcher
+            :model-value="switcherValue"
+            :profiles="configs.library.value.profiles"
+            :show-draft="configs.status.value === 'draft'"
+            :draft-name="configs.label.value"
+            :extra-options="exampleConfig.trim() ? [{ value: 'example', label: 'Example settings' }] : []"
+            show-add
+            show-delete
+            @update:model-value="chooseConfig"
+            @add="startRuleEdit()"
+            @delete="deleteSelectedProfile"
+          />
           <p v-if="configMode === 'defaults'" class="muted">No linti.yaml is passed to LinTi. This rule is selected for the example.</p>
           <p v-else-if="configMode === 'example'" class="muted">This example needs these settings to demonstrate the rule.</p>
           <p v-else-if="configMode === 'working'" class="muted">Using {{ configs.label.value }}{{ configs.status.value === 'draft' ? ' (unsaved local draft)' : ' (saved in this browser)' }}.</p>
@@ -394,9 +467,37 @@ onBeforeUnmount(() => {
             <pre><code>{{ lintiYaml }}</code></pre>
           </details>
           <div class="config-links">
-            <UButton icon="i-lucide-sliders-horizontal" color="neutral" variant="outline" size="sm" @click="editVariant()">Try a variant in configurator</UButton>
-            <UButton v-if="configMode === 'working' && configs.status.value === 'draft'" icon="i-lucide-save" color="neutral" variant="link" size="sm" @click="saveVariant()">Save this variant</UButton>
+            <UButton v-if="!ruleEditorOpen" icon="i-lucide-pencil" color="neutral" variant="outline" size="sm" @click="startRuleEdit()">Edit {{ selected.id }} settings</UButton>
+            <UButton v-else color="neutral" variant="ghost" size="sm" @click="ruleEditorOpen = false">Close editor</UButton>
+            <UButton v-if="configMode === 'working' && configs.status.value === 'draft'" icon="i-lucide-save" size="sm" @click="openRuleSave()">Save variant</UButton>
+            <UButton :to="{ path: '/config', query: { from: 'rules', rule: selected.id } }" icon="i-lucide-sliders-horizontal" color="neutral" variant="link" size="sm">Open full configurator</UButton>
           </div>
+          <div v-if="ruleEditorOpen" class="rule-editor" :aria-label="`Edit ${selected.id} settings`">
+            <p class="muted">Only {{ selected.id }} settings can be changed here. This variant stays in this browser until you save it.</p>
+            <p v-if="ruleCard.rules.length > 1" class="muted">These settings are shared with {{ ruleCard.rules.filter(rule => rule.id !== selected.id).map(rule => rule.id).join(', ') }}.</p>
+            <p v-if="ruleEditorLocked" class="error" role="alert">This configuration has invalid YAML or a rule block that cannot be edited here. Open the full configurator to fix it.</p>
+            <template v-else>
+              <ConfigField
+                v-for="field in editableRuleFields"
+                :key="field.key"
+                :field="field"
+                :value="effectiveValue(parsedRuleConfig.data, field)"
+                :changed="isChanged(parsedRuleConfig.data, field)"
+                :issue="ruleConfigIssues.find(issue => issue.path.join('.') === field.path.join('.'))"
+                :unset-label="field.key === 'severity' ? `Rule default (${selected.severity})` : undefined"
+                @update="updateRuleField(field, $event)"
+              />
+            </template>
+          </div>
+          <form v-if="ruleSaveOpen" class="rule-save" @submit.prevent="saveRuleVariant()">
+            <label class="field-label" for="rule-variant-name">Name this configuration</label>
+            <div class="rule-save-actions">
+              <input id="rule-variant-name" v-model="ruleSaveName" type="text" maxlength="100" placeholder="e.g. CI rules" required>
+              <UButton type="submit" size="sm">Save in this browser</UButton>
+              <UButton type="button" size="sm" color="neutral" variant="ghost" @click="ruleSaveOpen = false">Cancel</UButton>
+            </div>
+            <p v-if="ruleSaveError" class="error" role="alert">{{ ruleSaveError }}</p>
+          </form>
         </section>
         <div v-if="shownContext.length" class="context">
           <p class="context-title">Runs with</p>
@@ -520,12 +621,12 @@ onBeforeUnmount(() => {
 .run-config { margin-top: 1rem; padding: .8rem; border: 1px solid var(--ui-border-accented); border-radius: .45rem; background: var(--ui-bg); }
 .run-config h4 { font-size: .95rem; font-weight: 700; }
 .run-config .muted { margin: .45rem 0; }
-.config-choices { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .5rem; }
-.config-choices button { padding: .35rem .65rem; border: 1px solid var(--ui-border); border-radius: .4rem; font-size: .82rem; }
-.config-choices button:hover, .config-choices button.active { border-color: var(--ui-primary); }
-.config-choices button.active { color: var(--ui-primary); background: color-mix(in srgb, var(--ui-primary) 8%, var(--ui-bg)); }
-.config-choices select { padding: .35rem .65rem; border: 1px solid var(--ui-border); border-radius: .4rem; color: var(--ui-text); background: var(--ui-bg); font-size: .82rem; }
 .config-links { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: .5rem; }
+.rule-editor, .rule-save { margin-top: .8rem; padding: .75rem; border: 1px solid var(--ui-border); border-radius: .4rem; background: var(--ui-bg-elevated); }
+.rule-editor .muted { margin: .2rem 0 .6rem; }
+.rule-editor :deep(.config-field + .config-field) { border-top: 1px solid var(--ui-border); }
+.rule-save-actions { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.rule-save-actions input { flex: 1 1 12rem; min-width: 0; padding: .35rem .5rem; border: 1px solid var(--ui-border); border-radius: .4rem; background: var(--ui-bg); color: var(--ui-text); font-size: 1rem; }
 .default-values { margin: .6rem 0; font-size: .85rem; }
 .default-values summary { cursor: pointer; color: var(--ui-primary); }
 .default-values pre { margin-top: .5rem; padding: .7rem; overflow-x: auto; border-radius: .4rem; background: var(--ui-bg-elevated); }
