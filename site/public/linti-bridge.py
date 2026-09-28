@@ -4,75 +4,25 @@ import json
 import warnings
 from dataclasses import asdict
 
-import yaml
-from pydantic import ValidationError
-
-from linti.config import Config, LintiConfigWarning
-from linti.linter.api import lint_process_model
-from linti.linter.fixer import auto_fix_process
-from linti.linter.linter import Linter
-from linti.linter.text_api import lint_text
-from linti.model.process_ir import ProcessIR, ProcedureInfo
-from linti.rules.rule_factory import create_rules
-
-
-def _load_config(text):
-    """Validate linti.yaml text like the CLI does; return (Config, warnings)."""
-    try:
-        data = yaml.safe_load(text or "") or {}
-    except yaml.YAMLError as error:
-        raise ValueError(f"Invalid linti.yaml: {error}") from None
-    if not isinstance(data, dict):
-        raise ValueError("Invalid linti.yaml: expected a mapping at the top level.")
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always", LintiConfigWarning)
-        try:
-            cfg = Config.model_validate(data)
-        except ValidationError as error:
-            raise ValueError(f"Invalid linti.yaml: {error}") from None
-    return cfg, caught
+from linti.linter.text_api import config_from_text, lint_rule_text, lint_text
 
 
 def run_linti(source, procedure, rule_id, apply_fix, context_json="{}"):
-    if procedure not in {"prolog", "metadata", "data", "epilog"}:
-        raise ValueError(f"Unknown procedure: {procedure}")
     context = json.loads(context_json)
-
-    cfg, caught = _load_config(context.get("config", ""))
-    with warnings.catch_warnings(record=True) as selected:
-        # Selecting a deprecated or disabled rule on purpose may warn.
-        warnings.simplefilter("always", LintiConfigWarning)
-        token_rules, statement_rules = create_rules(cfg, select=rule_id)
-    linter = Linter(token_rules, statement_rules)
-    process = ProcessIR(
-        name="playground",
-        parameters=list(context.get("parameters") or []),
-        variables=list(context.get("variables") or []),
-        datasource_type=context.get("datasource_type") or None,
-        datasource_query=context.get("datasource_query") or None,
-        **{procedure: ProcedureInfo(code=source)},
-    )
-    fixes = 0
-    if apply_fix:
-        fixes = sum(auto_fix_process(process, linter).values())
-    issues = lint_process_model(process, linter)
     return json.dumps(
-        {
-            "code": getattr(process, procedure).code,
-            "fixes": fixes,
-            "warnings": [str(warning.message) for warning in [*caught, *selected]],
-            "issues": [
-                {
-                    "rule_id": issue.rule_id,
-                    "message": issue.message,
-                    "line": issue.line,
-                    "column": issue.column,
-                    "severity": issue.severity.value,
-                    "fixable": issue.fix is not None,
-                }
-                for _, issue, _ in issues
-            ],
-        }
+        asdict(
+            lint_rule_text(
+                source,
+                procedure,
+                rule_id,
+                context.get("config", ""),
+                auto_fix=apply_fix,
+                parameters=context.get("parameters"),
+                variables=context.get("variables"),
+                datasource_type=context.get("datasource_type"),
+                datasource_query=context.get("datasource_query"),
+            )
+        )
     )
 
 
@@ -87,3 +37,14 @@ def run_playground(text, config_text, apply_fix):
     except (ValueError, OSError) as exc:
         return json.dumps({"error": str(exc)})
     return json.dumps(asdict(result))
+
+
+def validate_config(config_text):
+    """Use the real Core loader before persisting a browser configuration."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        try:
+            config_from_text(config_text)
+        except ValueError as exc:
+            return json.dumps({"valid": False, "message": str(exc)})
+    return json.dumps({"valid": True, "warnings": [str(item.message) for item in caught]})

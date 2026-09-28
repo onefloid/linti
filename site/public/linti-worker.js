@@ -1,5 +1,8 @@
 /* Runs the real LinTi package in a browser worker, away from the UI thread. */
 let runtime;
+const MAX_CODE_BYTES = 10 * 1024 * 1024;
+const MAX_CONFIG_BYTES = 256 * 1024;
+const encoder = new TextEncoder();
 
 function initialize() {
   runtime ||= load().catch((error) => {
@@ -38,16 +41,26 @@ async function load() {
 self.onmessage = async ({ data }) => {
   const { id, action = 'rule' } = data;
   try {
+    if (!['rule', 'process', 'validate'].includes(action)) throw new Error('Unknown lint action');
+    if (encoder.encode(data.code || '').byteLength > MAX_CODE_BYTES) {
+      throw new Error('Code is too large for the browser playground (10 MB limit).');
+    }
+    const configText = action === 'rule' ? data.context?.config : data.config;
+    if (encoder.encode(configText || '').byteLength > MAX_CONFIG_BYTES) {
+      throw new Error('Configuration is too large for the browser playground (256 KB limit).');
+    }
     const pyodide = await initialize();
     // Loading is done; tell the page so its run timeout covers only the
     // (synchronous) lint itself, not the Pyodide download.
     self.postMessage({ id, status: 'running' });
     // Pass user input as data, never interpolate it into Python source.
-    const run = pyodide.globals.get(action === 'process' ? 'run_playground' : 'run_linti');
+    const run = pyodide.globals.get(action === 'process' ? 'run_playground' : action === 'validate' ? 'validate_config' : 'run_linti');
     try {
       const result = action === 'process'
         ? run(data.code, data.config || '', data.fix)
-        : run(data.code, data.procedure, data.ruleId, data.fix, JSON.stringify(data.context || {}));
+        : action === 'validate'
+          ? run(data.config || '')
+          : run(data.code, data.procedure, data.ruleId, data.fix, JSON.stringify(data.context || {}));
       const parsed = JSON.parse(result);
       self.postMessage(parsed.error ? { id, error: parsed.error } : { id, result: parsed });
     } finally {

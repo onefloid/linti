@@ -15,10 +15,11 @@ from typing import Literal, Optional
 
 import yaml
 
-from linti.config import Config
-from linti.linter.api import lint_process, linter_from_config
+from linti.config import Config, LintiConfigWarning
+from linti.linter.api import lint_process, lint_process_model, linter_from_config
 from linti.linter.fixer import auto_fix_process
 from linti.linter.reporter import adjust_line_numbers_in_message, filter_by_severity
+from linti.model.process_ir import ProcessIR, ProcedureInfo
 from linti.provider.base import require_single_process_name
 from linti.provider.factory import provider_for_path
 from linti.provider.pa_code import is_pa_code_content
@@ -58,6 +59,16 @@ class TextLintResult:
     warnings: list[str] = field(default_factory=list)
 
 
+@dataclass
+class RuleTextResult:
+    """One selected rule run against a procedure with optional process context."""
+
+    code: str
+    fixes: int
+    issues: list[TextIssue]
+    warnings: list[str] = field(default_factory=list)
+
+
 def detect_format(text: str) -> TextFormat:
     """Guess the process format of *text*.
 
@@ -93,6 +104,63 @@ def config_from_text(config_text: Optional[str]) -> Config:
     return Config(**data)
 
 
+def _check_text_size(text: str, max_bytes: int) -> None:
+    size = len(text.encode("utf-8"))
+    if size > max_bytes:
+        raise ValueError(f"Input exceeds size limit ({size} > {max_bytes} bytes)")
+
+
+def lint_rule_text(
+    source: str,
+    procedure: str,
+    rule_id: str,
+    config_text: Optional[str] = None,
+    *,
+    auto_fix: bool = False,
+    parameters: Optional[list[str]] = None,
+    variables: Optional[list[str]] = None,
+    datasource_type: Optional[str] = None,
+    datasource_query: Optional[str] = None,
+) -> RuleTextResult:
+    """Lint a selected rule using the same limits and severity filter as lint_text."""
+    if procedure not in {"prolog", "metadata", "data", "epilog"}:
+        raise ValueError(f"Unknown procedure: {procedure}")
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", LintiConfigWarning)
+        cfg = config_from_text(config_text)
+        _check_text_size(source, cfg.max_file_size)
+        linter = linter_from_config(cfg, rule_id)
+        process = ProcessIR(
+            name="playground",
+            parameters=list(parameters or []),
+            variables=list(variables or []),
+            datasource_type=datasource_type or None,
+            datasource_query=datasource_query or None,
+            **{procedure: ProcedureInfo(code=source)},
+        )
+        fixes = sum(auto_fix_process(process, linter).values()) if auto_fix else 0
+        issues = filter_by_severity(lint_process_model(process, linter), cfg.min_severity)
+
+    return RuleTextResult(
+        code=getattr(process, procedure).code,
+        fixes=fixes,
+        warnings=[str(warning.message) for warning in caught],
+        issues=[
+            TextIssue(
+                procedure=proc_name,
+                rule_id=issue.rule_id,
+                message=issue.message,
+                line=issue.line,
+                column=issue.column,
+                severity=issue.severity.value,
+                fixable=issue.fix is not None,
+            )
+            for proc_name, issue, _ in issues
+        ],
+    )
+
+
 def lint_text(
     text: str,
     config_text: Optional[str] = None,
@@ -109,6 +177,9 @@ def lint_text(
         warnings.simplefilter("always")
         cfg = config_from_text(config_text)
         linter = linter_from_config(cfg, select)
+
+        # detect_format may parse YAML; enforce the configured limit first.
+        _check_text_size(text, linter.max_file_size)
 
         text_format = detect_format(text)
         with tempfile.TemporaryDirectory(prefix="linti-") as tmp:

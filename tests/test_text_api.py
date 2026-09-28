@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from linti.linter.text_api import config_from_text, detect_format, lint_text
+from linti.linter.text_api import config_from_text, detect_format, lint_rule_text, lint_text
 
 EXAMPLES = Path(__file__).parents[1] / "example"
 
@@ -90,3 +90,35 @@ def test_invalid_config_text_raises_value_error(config_text):
 
 def test_empty_config_text_uses_defaults():
     assert config_from_text("") == config_from_text("# only a comment\n")
+
+
+def test_selected_rule_respects_severity_and_nesting_limits():
+    assert [issue.rule_id for issue in lint_rule_text("nValue = 1", "prolog", "P110").issues] == ["P110"]
+    assert not lint_rule_text("nValue = 1", "prolog", "P110", "severity: error\n").issues
+
+    nested = "IF (1 = 1);\n  IF (1 = 1);\n    nValue = 1;\n  ENDIF;\nENDIF;"
+    limited = lint_rule_text(nested, "prolog", "F220", "max_nesting_depth: 1\n")
+    assert [issue.rule_id for issue in limited.issues] == ["P900"]
+
+
+def test_selected_rule_carries_context_and_config_warnings():
+    result = lint_rule_text(
+        "pFactor = 2;",
+        "prolog",
+        "C210",
+        "rules:\n  process_quit:\n    enabled: true\n",
+        parameters=["pFactor"],
+    )
+    assert any(issue.rule_id == "C210" for issue in result.issues)
+    assert any("process_quit" in warning for warning in result.warnings)
+
+
+def test_input_size_is_checked_before_format_detection(monkeypatch):
+    def unexpected_parse(_text):
+        raise AssertionError("format detection must not run on oversized input")
+
+    monkeypatch.setattr("linti.linter.text_api.detect_format", unexpected_parse)
+    with pytest.raises(ValueError, match="exceeds size limit"):
+        lint_text("nValue = 1;", "max_file_size: 4\n")
+    with pytest.raises(ValueError, match="exceeds size limit"):
+        lint_rule_text("nValue = 1;", "prolog", "F220", "max_file_size: 4\n")

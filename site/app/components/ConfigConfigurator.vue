@@ -4,6 +4,7 @@ import type { AnnotationType } from '@codemirror/state'
 
 const route = useRoute()
 const configs = useConfigLibrary()
+const validator = useLintiWorker<{ valid: boolean, message?: string }>()
 const origin = computed(() => route.query.from === 'rules' || route.query.from === 'playground' ? route.query.from : null)
 const originRule = computed(() => {
   const id = String(route.query.rule || '').toUpperCase()
@@ -226,11 +227,6 @@ function createVariant() {
 }
 
 function saveCurrent(asNew = false): boolean {
-  if (parseTimer) syncFromEditor()
-  if (errorCount.value) {
-    profileError.value = 'Fix the YAML errors before saving.'
-    return false
-  }
   try {
     configs.save(profileName.value, asNew)
     profileName.value = configs.label.value
@@ -262,11 +258,24 @@ function cancelSave() {
 }
 
 function submitSave() {
-  if (!saveCurrent(saveAsNewMode.value)) return
-  saveOpen.value = false
-  const action = pendingSwitch.value
-  pendingSwitch.value = null
-  action?.()
+  if (validator.busy.value) return
+  if (parseTimer) syncFromEditor()
+  const text = currentText()
+  validator.run({ action: 'validate', config: text }, (result) => {
+    if (currentText() !== text) {
+      profileError.value = 'The YAML changed during validation. Please save again.'
+      return
+    }
+    if (!result.valid) {
+      profileError.value = result.message || 'LinTi could not load this YAML.'
+      return
+    }
+    if (!saveCurrent(saveAsNewMode.value)) return
+    saveOpen.value = false
+    const action = pendingSwitch.value
+    pendingSwitch.value = null
+    action?.()
+  }, message => (profileError.value = message))
 }
 
 function finishSwitch(saveFirst: boolean) {
@@ -468,7 +477,7 @@ onBeforeUnmount(() => {
           @add="createVariant()"
           @delete="deleteSelected"
         />
-        <UButton v-if="hasUnsavedChanges" class="save-action" size="sm" :disabled="!!errorCount" @click="openSave()">{{ configs.activeProfile.value ? 'Save changes' : 'Save variant' }}</UButton>
+        <UButton v-if="hasUnsavedChanges" class="save-action" size="sm" @click="openSave()">{{ configs.activeProfile.value ? 'Save changes' : 'Save variant' }}</UButton>
       </div>
       <p class="local-note">Only in this browser · no account or sync</p>
       <form v-if="saveOpen" class="save-panel" @submit.prevent="submitSave()">
@@ -476,7 +485,7 @@ onBeforeUnmount(() => {
           <input ref="nameInput" v-model="profileName" type="text" maxlength="100" placeholder="e.g. Strict CI" aria-label="Configuration name">
         </label>
         <div class="save-buttons">
-          <UButton type="submit" size="sm" :disabled="!!errorCount">Save in this browser</UButton>
+          <UButton type="submit" size="sm" :loading="validator.busy.value">{{ validator.busy.value ? 'Validating with LinTi…' : 'Save in this browser' }}</UButton>
           <UButton type="button" size="sm" color="neutral" variant="ghost" @click="cancelSave()">Cancel</UButton>
         </div>
       </form>

@@ -12,6 +12,7 @@ await pyodide.runPythonAsync('import micropip\nawait micropip.install(wheel_url,
 await pyodide.runPythonAsync(await readFile(new URL('linti-bridge.py', root), 'utf8'));
 const run = pyodide.globals.get('run_linti');
 const runPlayground = pyodide.globals.get('run_playground');
+const validate = pyodide.globals.get('validate_config');
 
 try {
   const finding = JSON.parse(run('nValue=1;', 'prolog', 'F220', false));
@@ -25,6 +26,10 @@ try {
   assert.ok(JSON.parse(run('IF (x = 1);\nENDIF;', 'prolog', 'F110', false, lowercase)).issues.length > 0);
   const parameter = JSON.stringify({ parameters: ['pFactor'] });
   assert.equal(JSON.parse(run("pFactor = 2;", 'prolog', 'C210', false, parameter)).issues.length > 0, true);
+  assert.equal(JSON.parse(run('nValue = 1', 'prolog', 'P110', false, JSON.stringify({ config: 'severity: error\n' }))).issues.length, 0);
+  assert.ok(JSON.parse(run('IF (x = 1);\nIF (y = 2);\nENDIF;\nENDIF;', 'prolog', 'F220', false, JSON.stringify({ config: 'max_nesting_depth: 1\n' }))).issues.some(issue => issue.rule_id === 'P900'));
+  assert.equal(JSON.parse(validate('rules:\n  keyword_casing:\n    enabled: "false"\n')).valid, true);
+  assert.equal(JSON.parse(validate('rules: [')).valid, false);
 
   const paCode = await readFile(new URL('../../example/pa-code.ti', import.meta.url), 'utf8');
   const process = JSON.parse(runPlayground(paCode, 'rules:\n  item_skip:\n    enabled: true\n', false));
@@ -38,4 +43,5 @@ try {
 } finally {
   run.destroy();
   runPlayground.destroy();
+  validate.destroy();
 }

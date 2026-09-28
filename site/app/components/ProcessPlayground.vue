@@ -98,18 +98,19 @@ const config = useRuntimeConfig()
 const editorHost = ref<HTMLElement | null>(null)
 const configs = useConfigLibrary()
 const configText = configs.yaml
-const busy = ref(false)
+const worker = useLintiWorker<Result>()
+const { busy, error } = worker
 const loading = ref(true)
-const error = ref('')
 const result = ref<Result | null>(null)
 const fixSummary = ref('')
 const copied = ref(false)
 
 let view: EditorView | undefined
 let setDiagnostics: typeof import('@codemirror/lint').setDiagnostics | undefined
-let worker: Worker | undefined
-let requestId = 0
 let lintTimer: ReturnType<typeof setTimeout> | undefined
+
+watch(worker.ready, ready => { if (ready) loading.value = false })
+watch(error, message => { if (message) loading.value = false })
 
 const fixableCount = computed(() => result.value?.issues.filter(issue => issue.fixable).length ?? 0)
 const errorCount = computed(() => result.value?.issues.filter(issue => issue.severity === 'error').length ?? 0)
@@ -141,21 +142,8 @@ function run(fix = false) {
   if (!view) return
   clearTimeout(lintTimer)
   const code = currentCode()
-  const id = ++requestId
-  busy.value = true
-  error.value = ''
-  worker ||= new Worker(`${config.app.baseURL}linti-worker.js`)
-  worker.onmessage = ({ data }: MessageEvent<{ id: number, status?: 'running', result?: Result, error?: string }>) => {
-    // The worker announces when Pyodide has loaded and the lint starts; only
-    // the final reply for the latest request matters here.
-    if (data.status || data.id !== requestId) return
-    busy.value = false
+  worker.run({ action: 'process', code, config: configText.value, fix }, (next) => {
     loading.value = false
-    if (data.error) {
-      error.value = data.error
-      return
-    }
-    const next = data.result!
     if (fix && currentCode() !== code) {
       // Never overwrite edits made while the fix was being computed.
       fixSummary.value = 'The code changed while fixing; run auto-fix again.'
@@ -176,16 +164,7 @@ function run(fix = false) {
     if (currentCode() !== (fix ? next.code : code)) return
     result.value = next
     showDiagnostics(next.issues)
-  }
-  worker.onerror = (event) => {
-    // The worker script itself failed; start from scratch on the next run.
-    worker?.terminate()
-    worker = undefined
-    busy.value = false
-    loading.value = false
-    error.value = event.message || 'The browser could not load Pyodide.'
-  }
-  worker.postMessage({ id, action: 'process', code, config: configText.value, fix })
+  })
 }
 
 function scheduleLint() {
@@ -269,7 +248,6 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   clearTimeout(lintTimer)
   view?.destroy()
-  worker?.terminate()
 })
 </script>
 

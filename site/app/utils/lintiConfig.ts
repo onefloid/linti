@@ -186,13 +186,16 @@ const fieldsByRule = new Map(ruleCards.map(card => [card.configKey, card.fields]
 /** The value LinTi uses for *field*: what the YAML sets, else the default. */
 export function effectiveValue(data: Record<string, unknown>, field: FieldSpec): unknown {
   const value = getPath(data, field.path)
-  return value === undefined ? field.default : value
+  if (value === undefined) return field.default
+  if (field.kind === 'boolean') return coercedBoolean(value) ?? value
+  if (field.kind === 'integer' && typeof value === 'string' && /^\s*[+-]?\d+\s*$/.test(value)) return Number(value)
+  return value
 }
 
 /** Whether the YAML sets *field* to something other than its default. */
 export function isChanged(data: Record<string, unknown>, field: FieldSpec): boolean {
   const value = getPath(data, field.path)
-  return value !== undefined && !sameValue(value, field.default)
+  return value !== undefined && !sameValue(effectiveValue(data, field), field.default)
 }
 
 export function parseConfig(text: string): ParsedConfig {
@@ -279,13 +282,15 @@ function checkValue(field: FieldSpec, value: unknown, issues: ConfigIssue[]) {
     }
     return
   }
-  const wrong = (expected: string) => issues.push({ path: field.path, level: 'error', message: `'${where}' must be ${expected}; LinTi rejects this file.` })
+  // Fast form feedback only. The Core loader is authoritative when saving.
+  const wrong = (expected: string) => issues.push({ path: field.path, level: 'error', message: `'${where}' should be ${expected}; LinTi will validate this file when saving.` })
   switch (field.kind) {
     case 'boolean':
-      if (typeof value !== 'boolean') wrong('true or false')
+      if (coercedBoolean(value) === null) wrong('true or false')
       break
     case 'integer':
-      if (typeof value !== 'number' || !Number.isInteger(value)) wrong('a whole number')
+      if (!(typeof value === 'number' && Number.isInteger(value))
+        && !(typeof value === 'string' && /^\s*[+-]?\d+\s*$/.test(value))) wrong('a whole number')
       break
     case 'enum':
       if (typeof value !== 'string' || !field.options.includes(value)) wrong(`one of ${field.options.join(', ')}`)
@@ -296,6 +301,16 @@ function checkValue(field: FieldSpec, value: unknown, issues: ConfigIssue[]) {
     default:
       if (typeof value !== 'string') wrong('a string')
   }
+}
+
+function coercedBoolean(value: unknown): boolean | null {
+  if (typeof value === 'boolean') return value
+  if (value === 1 || value === 0) return value === 1
+  if (typeof value !== 'string') return null
+  const normalized = value.toLowerCase().trim()
+  if (['true', 't', 'yes', 'y', 'on', '1'].includes(normalized)) return true
+  if (['false', 'f', 'no', 'n', 'off', '0'].includes(normalized)) return false
+  return null
 }
 
 /** Problems LinTi would report (or silently ignore) when loading *data*. */

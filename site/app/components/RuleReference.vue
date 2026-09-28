@@ -31,18 +31,12 @@ type Rule = {
 }
 type Finding = { rule_id: string, message: string, line: number, column: number, severity: 'error' | 'warning', fixable: boolean }
 type Result = { code: string, fixes: number, warnings: string[], issues: Finding[] }
-type WorkerReply = { id: number, status?: 'running', result?: Result, error?: string }
-
-// Upper bound for one lint run once Pyodide is loaded. Loading itself is not
-// timed: a first visit on a slow connection may legitimately take longer.
-const RUN_TIMEOUT_MS = 15_000
 const DEFAULT_RULE = 'C150'
 
 const allRules = rules as Rule[]
 const configs = useConfigLibrary()
 const route = useRoute()
 const router = useRouter()
-const config = useRuntimeConfig()
 const query = ref('')
 const groups = [...new Set(allRules.map(rule => rule.group))]
 const group = ref('all')
@@ -121,8 +115,8 @@ function removeContext(field: ContextField) {
   if (field === 'variables') variables.value = ''
   if (field === 'datasource') datasourceType.value = datasourceQuery.value = ''
 }
-const busy = ref(false)
-const error = ref('')
+const worker = useLintiWorker<Result>()
+const { busy, error } = worker
 const result = ref<Result | null>(null)
 const errorCount = computed(() => result.value?.issues.filter(issue => issue.severity === 'error').length ?? 0)
 const warningCount = computed(() => (result.value?.issues.length ?? 0) - errorCount.value)
@@ -132,18 +126,6 @@ const filtered = computed(() => allRules.filter((rule) => {
   const text = `${rule.id} ${rule.name} ${rule.description} ${rule.explanation}`.toLowerCase()
   return text.includes(query.value.toLowerCase().trim())
 }))
-
-let worker: Worker | undefined
-let requestId = 0
-// The request whose reply the UI is waiting for. Replies for any other id are
-// stale (the user moved on) and are dropped.
-let pending: { id: number, fix: boolean } | undefined
-let watchdog: ReturnType<typeof setTimeout> | undefined
-
-function finish() {
-  pending = undefined
-  busy.value = false
-}
 
 function chooseExample(example?: Example) {
   code.value = example?.code || 'nValue=1;'
@@ -207,64 +189,11 @@ onMounted(async () => {
 watch(() => [route.query.rule, route.query.group], applyQuery)
 watch(() => route.query.config, value => (usingWorkingConfig.value = value === 'working'))
 
-// Any change to what would be linted abandons the in-flight request, so its
-// result can neither be shown for the wrong rule nor overwrite edited code.
-watch([code, procedure, selectedId, lintiYaml, parameters, variables, datasourceType, datasourceQuery], () => {
-  if (pending) finish()
-})
-
-function resetWorker() {
-  clearTimeout(watchdog)
-  worker?.terminate()
-  worker = undefined
-}
-
-function onReply({ data }: MessageEvent<WorkerReply>) {
-  if (data.status === 'running') {
-    // Guards the worker, not a particular request: a hung run blocks every
-    // request queued behind it, stale or not.
-    clearTimeout(watchdog)
-    watchdog = setTimeout(() => {
-      resetWorker()
-      if (pending) {
-        finish()
-        error.value = `LinTi did not finish within ${RUN_TIMEOUT_MS / 1000} s and was stopped.`
-      }
-    }, RUN_TIMEOUT_MS)
-    return
-  }
-  clearTimeout(watchdog)
-  if (data.id !== pending?.id) return
-  const { fix } = pending
-  finish()
-  if (data.error) {
-    error.value = data.error
-  } else if (data.result) {
-    result.value = data.result
-    if (fix) code.value = data.result.code
-  }
-}
-
-function getWorker(): Worker {
-  if (!worker) {
-    worker = new Worker(`${config.app.baseURL}linti-worker.js`)
-    worker.onmessage = onReply
-    worker.onerror = (event) => {
-      // The worker script itself failed; start from scratch on the next run.
-      resetWorker()
-      finish()
-      error.value = event.message || 'The browser could not load Pyodide.'
-    }
-  }
-  return worker
-}
+watch([code, procedure, selectedId, lintiYaml, parameters, variables, datasourceType, datasourceQuery], worker.invalidate)
 
 function run(fix = false) {
   if (busy.value || !import.meta.client) return
-  busy.value = true
-  error.value = ''
   result.value = null
-  pending = { id: ++requestId, fix }
   const context = {
     config: lintiYaml.value,
     parameters: splitNames(parameters.value),
@@ -272,7 +201,13 @@ function run(fix = false) {
     datasource_type: datasourceType.value.trim(),
     datasource_query: datasourceQuery.value.trim(),
   }
-  getWorker().postMessage({ id: pending.id, code: code.value, procedure: procedure.value, ruleId: selected.value.id, fix, context })
+  const source = code.value
+  const ruleId = selected.value.id
+  worker.run({ action: 'rule', code: source, procedure: procedure.value, ruleId, fix, context }, (next) => {
+    if (code.value !== source || selected.value.id !== ruleId || lintiYaml.value !== context.config) return
+    result.value = next
+    if (fix) code.value = next.code
+  })
 }
 
 function jumpTo(issue: Finding) {
@@ -300,7 +235,6 @@ onBeforeUnmount(() => {
     usingWorkingConfig: usingWorkingConfig.value,
     exampleConfig: exampleConfig.value,
   }
-  resetWorker()
 })
 </script>
 
