@@ -35,8 +35,8 @@ It is not affiliated with, endorsed by, sponsored by, or maintained by IBM. TM1,
 * Config configurator: build a `linti.yaml` from a use case (recommended,
   strict CI gate, PA v12 migration), fine-tune it in a form or as YAML, and
   download it (<https://onefloid.github.io/linti/config>). Configurations can
-  be saved locally in the browser and selected in the rule reference, where
-  one rule's settings can be edited without opening the full configurator.
+  be saved locally in the browser. The rule reference opens the configurator
+  at the selected rule with its example settings.
 
 ## Supported Input Formats
 
