@@ -68,6 +68,9 @@ const procedure = ref('prolog')
 const exampleConfig = ref('')
 const usingWorkingConfig = ref(false)
 const lintiYaml = computed(() => usingWorkingConfig.value ? configs.yaml.value : exampleConfig.value)
+const configLabel = computed(() => usingWorkingConfig.value
+  ? `${configs.label.value}${configs.status.value === 'draft' ? ' (local draft)' : configs.status.value === 'saved' ? ' (saved in this browser)' : ''}`
+  : exampleConfig.value.trim() ? 'Example settings' : 'LinTi defaults')
 
 function openRuleInConfigurator() {
   if (!usingWorkingConfig.value) {
@@ -361,8 +364,19 @@ onBeforeUnmount(() => {
         <label class="field-label" for="ti-code">TI code</label>
         <textarea id="ti-code" ref="codeEditor" v-model="code" class="code-editor" spellcheck="false" rows="10" aria-label="TI code" />
         <div class="config-handoff">
-          <p v-if="usingWorkingConfig" class="muted">Using your local configuration for this run. <button type="button" class="text-action" @click="useExampleSettings()">Use example settings</button></p>
-          <p v-else-if="exampleConfig.trim()" class="muted">This example uses its own settings.</p>
+          <details class="config-inspection">
+            <summary>Configuration used: {{ configLabel }}</summary>
+            <div class="config-inspection-body">
+              <p v-if="!lintiYaml.trim()" class="muted">No linti.yaml is passed to LinTi. This rule is selected for the example.</p>
+              <p v-else class="muted">This YAML is used for the run:</p>
+              <pre v-if="lintiYaml.trim()"><code>{{ lintiYaml }}</code></pre>
+              <template v-else-if="selected.default_config">
+                <p class="muted">Default values for {{ selected.id }}:</p>
+                <pre><code>{{ selected.default_config }}</code></pre>
+              </template>
+              <button v-if="usingWorkingConfig" type="button" class="text-action" @click="useExampleSettings()">Use example settings instead</button>
+            </div>
+          </details>
           <UButton icon="i-lucide-sliders-horizontal" color="neutral" variant="outline" size="sm" @click="openRuleInConfigurator()">Adjust {{ selected.id }} in configurator</UButton>
         </div>
         <div v-if="shownContext.length" class="context">
@@ -484,8 +498,12 @@ onBeforeUnmount(() => {
 .message { overflow-wrap: anywhere; }
 .meta { display: block; margin: .2rem 0 0 3.8rem; font-size: .78rem; color: var(--ui-text-muted); }
 .fixable { margin-left: .3rem; padding: 0 .4rem; border-radius: 1rem; background: color-mix(in srgb, var(--ui-success) 15%, transparent); color: var(--ui-success); }
-.config-handoff { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1rem; margin-top: .7rem; }
-.config-handoff .muted { margin: 0; }
+.config-handoff { display: flex; flex-wrap: wrap; align-items: flex-start; gap: .5rem; margin-top: .7rem; }
+.config-inspection { flex: 1 1 16rem; min-width: 0; border: 1px solid var(--ui-border); border-radius: .4rem; background: var(--ui-bg); }
+.config-inspection summary { padding: .4rem .6rem; cursor: pointer; color: var(--ui-text-muted); font-size: .85rem; }
+.config-inspection-body { padding: 0 .6rem .6rem; font-size: .85rem; }
+.config-inspection-body p { margin: .3rem 0; }
+.config-inspection-body pre { margin: .5rem 0; padding: .6rem; overflow-x: auto; border-radius: .4rem; background: var(--ui-bg-elevated); }
 .text-action { color: var(--ui-primary); text-decoration: underline; text-underline-offset: .15rem; }
 .empty { padding: .8rem; }
 @media (max-width: 760px) {
