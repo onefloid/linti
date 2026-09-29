@@ -48,9 +48,9 @@ function choose(event: Event) {
         <option v-for="profile in profiles" :key="profile.id" :value="`profile:${profile.id}`">{{ profile.name }}</option>
       </select>
     </label>
-    <div v-if="showAdd || showDelete" class="switcher-actions">
+    <div v-if="showAdd || (showDelete && selectedProfileId)" class="switcher-actions">
       <UButton v-if="showAdd" type="button" icon="i-lucide-plus" color="neutral" variant="outline" size="sm" aria-label="Create empty configuration" title="New configuration" @click="emit('add')" />
-      <UButton v-if="showDelete" type="button" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" aria-label="Delete selected configuration" title="Delete selected configuration" :disabled="!selectedProfileId" @click="selectedProfileId && emit('delete', selectedProfileId)" />
+      <UButton v-if="showDelete && selectedProfileId" type="button" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" aria-label="Delete selected configuration" title="Delete selected configuration" @click="emit('delete', selectedProfileId)" />
     </div>
   </div>
 </template>

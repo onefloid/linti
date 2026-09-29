@@ -31,6 +31,7 @@ const nameDialog = ref<HTMLDialogElement | null>(null)
 const nameInput = ref<HTMLInputElement | null>(null)
 const nameMode = ref<'new' | 'duplicate' | 'rename'>('new')
 const nameValue = ref('')
+const newTemplate = ref('empty')
 const nameError = ref('')
 const profileError = ref('')
 const pendingSwitch = shallowRef<(() => void) | null>(null)
@@ -52,7 +53,6 @@ const allFields = [...topLevelFields, ...ruleCards.flatMap(card => card.fields)]
 const changedCount = computed(() => allFields.filter(field => isChanged(data.value, field)).length)
 const errorCount = computed(() => parsed.value.parseErrors.length + issues.value.filter(issue => issue.level === 'error').length)
 const warningCount = computed(() => issues.value.filter(issue => issue.level === 'warning').length)
-const activePreset = computed(() => presets.find(preset => presetText(preset) === yamlText.value))
 const switcherValue = computed(() => configs.status.value === 'draft'
   ? 'draft'
   : configs.activeProfile.value ? `profile:${configs.activeProfile.value.id}` : 'defaults')
@@ -199,14 +199,6 @@ function setWorking(yaml: string) {
   openCards.value = new Set(ruleCards.filter(card => cardChanged(card)).map(card => card.configKey))
 }
 
-function choosePreset(preset: Preset) {
-  if (presetText(preset) === currentText()) return
-  askBeforeSwitch(() => {
-    configs.startDraft(`${preset.title} variant`, presetText(preset))
-    setWorking(configs.yaml.value)
-  })
-}
-
 function switchProfile(value: string) {
   if (value === switcherValue.value) return
   askBeforeSwitch(() => {
@@ -222,6 +214,7 @@ function createVariant() {
 
 function openNameDialog(mode: 'new' | 'duplicate' | 'rename') {
   nameMode.value = mode
+  newTemplate.value = 'empty'
   nameValue.value = mode === 'new' ? '' : mode === 'duplicate'
     ? `${configs.label.value} copy` : configs.activeProfile.value?.name ?? ''
   nameError.value = ''
@@ -246,8 +239,10 @@ function submitName() {
   }
   nameDialog.value?.close()
   if (nameMode.value === 'new') {
-    configs.startDraft(name, '')
-    setWorking('')
+    const preset = presets.find(item => item.key === newTemplate.value)
+    const source = preset ? presetText(preset) : ''
+    configs.startDraft(name, source)
+    setWorking(source)
   } else {
     submitSave(name, nameMode.value === 'duplicate')
   }
@@ -481,7 +476,7 @@ onBeforeUnmount(() => {
           <h2>Current configuration</h2>
           <span class="status-badge" :class="hasUnsavedChanges ? 'draft' : configs.status.value">{{ hasUnsavedChanges ? 'Unsaved changes' : configs.status.value === 'saved' ? 'Saved in this browser' : 'LinTi defaults' }}</span>
         </div>
-        <p class="muted">{{ configs.status.value === 'defaults' ? 'Choose a preset below or adjust a rule, then save your configuration.' : 'Adjust the rules below. Save when you want to keep this version.' }}</p>
+        <p class="muted">{{ configs.status.value === 'defaults' ? 'Create a configuration with + or adjust a rule below, then save it.' : 'Adjust the rules below. Save when you want to keep this version.' }}</p>
       </div>
       <p v-if="configs.storageError.value" class="error" role="alert">Browser storage is unavailable. Download your YAML before leaving this page.</p>
       <div class="library-primary" :class="{ 'with-save': hasUnsavedChanges }">
@@ -523,10 +518,21 @@ onBeforeUnmount(() => {
     <dialog ref="nameDialog" class="name-dialog" aria-labelledby="name-dialog-title">
       <form @submit.prevent="submitName()">
         <h2 id="name-dialog-title">{{ nameMode === 'new' ? 'New configuration' : nameMode === 'duplicate' ? 'Duplicate configuration' : 'Rename configuration' }}</h2>
-        <p v-if="nameMode === 'new'" class="muted">Starts with an empty linti.yaml. The name is used when you save it.</p>
+        <p v-if="nameMode === 'new'" class="muted">Choose a starting point. You can change every setting before saving.</p>
         <label class="profile-picker">Configuration name
           <input ref="nameInput" v-model="nameValue" type="text" maxlength="100" required placeholder="e.g. Strict CI" aria-label="Configuration name" @input="nameError = ''">
         </label>
+        <fieldset v-if="nameMode === 'new'" class="template-options">
+          <legend>Start from</legend>
+          <label class="template-option">
+            <input v-model="newTemplate" type="radio" name="new-template" value="empty">
+            <span><strong>Empty configuration</strong><small>Start with a blank linti.yaml.</small></span>
+          </label>
+          <label v-for="preset in presets" :key="preset.key" class="template-option">
+            <input v-model="newTemplate" type="radio" name="new-template" :value="preset.key">
+            <span><strong>{{ preset.title }}</strong><small>{{ preset.description }}</small></span>
+          </label>
+        </fieldset>
         <p v-if="nameError" class="error" role="alert">{{ nameError }}</p>
         <div class="save-buttons">
           <UButton type="submit" size="sm">{{ nameMode === 'new' ? 'Create' : nameMode === 'duplicate' ? 'Duplicate' : 'Rename' }}</UButton>
@@ -534,20 +540,6 @@ onBeforeUnmount(() => {
         </div>
       </form>
     </dialog>
-    <section class="presets" aria-label="Start from a use case">
-      <button
-        v-for="preset in presets"
-        :key="preset.key"
-        class="preset"
-        :class="{ active: activePreset?.key === preset.key }"
-        :aria-pressed="activePreset?.key === preset.key"
-        @click="choosePreset(preset)"
-      >
-        <span class="preset-title">{{ preset.title }}</span>
-        <span class="preset-description">{{ preset.description }}</span>
-      </button>
-    </section>
-
     <div class="pane-switch" role="tablist" aria-label="View">
       <button role="tab" :aria-selected="mobilePane === 'form'" :class="{ active: mobilePane === 'form' }" @click="mobilePane = 'form'">Form</button>
       <button role="tab" :aria-selected="mobilePane === 'yaml'" :class="{ active: mobilePane === 'yaml' }" @click="mobilePane = 'yaml'">linti.yaml</button>
@@ -679,10 +671,19 @@ onBeforeUnmount(() => {
 .profile-picker { display: flex; flex-direction: column; gap: .2rem; min-width: 0; font-size: .8rem; font-weight: 650; }
 .profile-picker select, .profile-picker input { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid var(--ui-border); border-radius: .4rem; padding: .35rem .5rem; color: var(--ui-text); background: var(--ui-bg); font-size: 1rem; }
 .local-note { margin: .5rem 0 0; color: var(--ui-text-muted); font-size: .76rem; }
-.name-dialog { width: min(26rem, calc(100vw - 2rem)); max-width: none; padding: 1.2rem; border: 1px solid var(--ui-border); border-radius: .6rem; color: var(--ui-text); background: var(--ui-bg); box-shadow: 0 1rem 3rem rgb(0 0 0 / 20%); }
+.name-dialog { width: min(32rem, calc(100vw - 2rem)); max-width: none; max-height: min(90dvh, 48rem); overflow-y: auto; padding: 1.2rem; border: 1px solid var(--ui-border); border-radius: .6rem; color: var(--ui-text); background: var(--ui-bg); box-shadow: 0 1rem 3rem rgb(0 0 0 / 20%); }
 .name-dialog::backdrop { background: rgb(0 0 0 / 45%); }
 .name-dialog form { display: grid; gap: .8rem; }
 .name-dialog h2 { font-size: 1.15rem; font-weight: 700; }
+.template-options { min-width: 0; padding: 0; border: 0; }
+.template-options legend { margin-bottom: .4rem; font-size: .8rem; font-weight: 650; }
+.template-option { display: flex; gap: .7rem; align-items: start; padding: .55rem .65rem; border: 1px solid var(--ui-border); border-radius: .45rem; cursor: pointer; }
+.template-option + .template-option { margin-top: .4rem; }
+.template-option:has(input:checked) { border-color: var(--ui-primary); background: color-mix(in srgb, var(--ui-primary) 6%, var(--ui-bg)); }
+.template-option input { margin-top: .2rem; accent-color: var(--ui-primary); }
+.template-option span { display: grid; gap: .15rem; min-width: 0; }
+.template-option strong { font-size: .9rem; }
+.template-option small { color: var(--ui-text-muted); font-size: .76rem; line-height: 1.35; }
 .save-buttons { justify-content: flex-end; }
 .library-more { margin-top: .75rem; padding-top: .6rem; border-top: 1px solid var(--ui-border); }
 .library-more summary { width: fit-content; cursor: pointer; color: var(--ui-primary); font-size: .82rem; font-weight: 600; }
@@ -693,12 +694,6 @@ onBeforeUnmount(() => {
 .status-badge.saved { border-color: var(--ui-success); }
 .switch-prompt { padding: .6rem; border-left: 3px solid var(--ui-warning); background: var(--ui-bg); }
 .return-links { position: sticky; top: .5rem; z-index: 10; display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin-bottom: 1.2rem; padding: .5rem; border: 1px solid var(--ui-border); border-radius: .5rem; background: var(--ui-bg); }
-.presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: .75rem; margin-bottom: 1.4rem; }
-.preset { display: flex; flex-direction: column; gap: .3rem; padding: .9rem 1rem; text-align: left; border: 1px solid var(--ui-border); border-radius: .6rem; background: var(--ui-bg); }
-.preset:hover { border-color: var(--ui-primary); }
-.preset.active { border-color: var(--ui-primary); box-shadow: inset 0 0 0 1px var(--ui-primary); background: color-mix(in srgb, var(--ui-primary) 6%, var(--ui-bg)); }
-.preset-title { font-weight: 700; }
-.preset-description { font-size: .82rem; line-height: 1.4; color: var(--ui-text-muted); }
 .pane-switch { display: none; }
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(18rem, 26rem); gap: 1.4rem; align-items: start; }
 .form { min-width: 0; border: 0; padding: 0; margin: 0; }
