@@ -27,15 +27,16 @@ const highlighted = ref('')
 const openCards = ref(new Set<string>())
 const mobilePane = ref<'form' | 'yaml'>('form')
 const copied = ref('')
-const profileName = ref('')
+const nameDialog = ref<HTMLDialogElement | null>(null)
 const nameInput = ref<HTMLInputElement | null>(null)
+const nameMode = ref<'new' | 'duplicate' | 'rename'>('new')
+const nameValue = ref('')
+const nameError = ref('')
 const profileError = ref('')
-const saveOpen = ref(false)
-const saveAsNewMode = ref(false)
 const pendingSwitch = shallowRef<(() => void) | null>(null)
 const libraryInput = ref<HTMLInputElement | null>(null)
 const shareError = ref('')
-const hasUnsavedChanges = computed(() => configs.dirty.value || profileName.value.trim() !== (configs.activeProfile.value?.name ?? configs.library.value.draft.name))
+const hasUnsavedChanges = configs.dirty
 
 let view: EditorView | undefined
 let setDiagnostics: typeof import('@codemirror/lint').setDiagnostics | undefined
@@ -194,10 +195,7 @@ function askBeforeSwitch(action: () => void) {
 
 function setWorking(yaml: string) {
   applyText(yaml)
-  profileName.value = configs.activeProfile.value?.name ?? configs.library.value.draft.name
   profileError.value = ''
-  saveOpen.value = false
-  saveAsNewMode.value = false
   openCards.value = new Set(ruleCards.filter(card => cardChanged(card)).map(card => card.configKey))
 }
 
@@ -219,17 +217,53 @@ function switchProfile(value: string) {
 }
 
 function createVariant() {
-  askBeforeSwitch(() => {
-    const source = currentText()
-    configs.startDraft(`${configs.label.value} copy`, source)
-    setWorking(source)
-  })
+  askBeforeSwitch(() => openNameDialog('new'))
 }
 
-function saveCurrent(asNew = false): boolean {
+function openNameDialog(mode: 'new' | 'duplicate' | 'rename') {
+  nameMode.value = mode
+  nameValue.value = mode === 'new' ? '' : mode === 'duplicate'
+    ? `${configs.label.value} copy` : configs.activeProfile.value?.name ?? ''
+  nameError.value = ''
+  nameDialog.value?.showModal()
+  void nextTick(() => nameInput.value?.focus())
+}
+
+function submitName() {
+  const name = nameValue.value.trim()
+  if (nameMode.value !== 'new' && validator.busy.value) {
+    nameError.value = 'Please wait for the current save to finish.'
+    return
+  }
+  if (!name) {
+    nameError.value = 'Give this configuration a name.'
+    return
+  }
+  if (configs.library.value.profiles.some(profile => profile.name.toLowerCase() === name.toLowerCase()
+    && (nameMode.value !== 'rename' || profile.id !== configs.activeProfile.value?.id))) {
+    nameError.value = 'A configuration with this name already exists.'
+    return
+  }
+  nameDialog.value?.close()
+  if (nameMode.value === 'new') {
+    configs.startDraft(name, '')
+    setWorking('')
+  } else {
+    submitSave(name, nameMode.value === 'duplicate')
+  }
+}
+
+function availableName(preferred: string): string {
+  const names = new Set(configs.library.value.profiles.map(profile => profile.name.toLowerCase()))
+  let name = preferred
+  let suffix = 2
+  while (names.has(name.toLowerCase())) name = `${preferred} (${suffix++})`
+  return name
+}
+
+function saveCurrent(name: string, asNew = false): boolean {
   try {
-    configs.save(profileName.value, asNew)
-    profileName.value = configs.label.value
+    configs.save(name, asNew)
     profileError.value = ''
     return true
   } catch (error) {
@@ -238,40 +272,26 @@ function saveCurrent(asNew = false): boolean {
   }
 }
 
-function openSave(asNew = false) {
-  saveAsNewMode.value = asNew
-  profileName.value = asNew
-    ? `${configs.activeProfile.value?.name ?? configs.label.value} copy`
-    : (configs.activeProfile.value?.name ?? configs.library.value.draft.name) || 'My configuration'
-  profileError.value = ''
-  saveOpen.value = true
-  void nextTick(() => {
-    nameInput.value?.scrollIntoView({ block: 'center' })
-    nameInput.value?.focus()
-  })
-}
-
-function cancelSave() {
-  saveOpen.value = false
-  profileName.value = configs.activeProfile.value?.name ?? configs.library.value.draft.name
-  profileError.value = ''
-}
-
-function submitSave() {
+function submitSave(explicitName?: string, asNew = false) {
   if (validator.busy.value) return
   if (parseTimer) syncFromEditor()
   const text = currentText()
+  const baseId = configs.library.value.draft.baseId
+  const draftName = configs.library.value.draft.name
+  const name = explicitName ?? (configs.activeProfile.value?.name
+    || availableName(configs.library.value.draft.name.trim() || 'My configuration'))
+  profileError.value = ''
   validator.run({ action: 'validate', config: text }, (result) => {
-    if (currentText() !== text) {
-      profileError.value = 'The YAML changed during validation. Please save again.'
+    if (currentText() !== text || configs.library.value.draft.baseId !== baseId
+      || configs.library.value.draft.name !== draftName) {
+      profileError.value = 'The configuration changed during validation. Please save again.'
       return
     }
     if (!result.valid) {
       profileError.value = result.message || 'LinTi could not load this YAML.'
       return
     }
-    if (!saveCurrent(saveAsNewMode.value)) return
-    saveOpen.value = false
+    if (!saveCurrent(name, asNew)) return
     const action = pendingSwitch.value
     pendingSwitch.value = null
     action?.()
@@ -280,7 +300,7 @@ function submitSave() {
 
 function finishSwitch(saveFirst: boolean) {
   if (saveFirst) {
-    openSave(saveOpen.value && saveAsNewMode.value)
+    submitSave()
     return
   }
   if (!saveFirst) {
@@ -335,7 +355,7 @@ async function uploadLibrary(event: Event) {
 
 async function copyShareLink() {
   if (parseTimer) syncFromEditor()
-  const link = shareLink(profileName.value.trim() || configs.label.value, currentText())
+  const link = shareLink(configs.label.value, currentText())
   shareError.value = link ? '' : 'This configuration is too large for a link. Download its YAML instead.'
   if (link) await copyText(link, 'link')
 }
@@ -386,7 +406,6 @@ onMounted(async () => {
   // Nothing is stored until the visitor changes something: the recommended
   // preset is what LinTi does without a linti.yaml anyway.
   const initial = configs.yaml.value
-  profileName.value = configs.activeProfile.value?.name ?? configs.library.value.draft.name
   yamlText.value = initial
   parsed.value = parseConfig(initial)
   openCards.value = new Set(ruleCards.filter(card => cardChanged(card)).map(card => card.configKey))
@@ -437,7 +456,7 @@ onMounted(async () => {
   pushDiagnostics()
   applyRuleQuery()
   if (route.query.save === '1') {
-    openSave()
+    submitSave()
   }
 })
 
@@ -477,18 +496,9 @@ onBeforeUnmount(() => {
           @add="createVariant()"
           @delete="deleteSelected"
         />
-        <UButton v-if="hasUnsavedChanges" class="save-action" size="sm" @click="openSave()">{{ configs.activeProfile.value ? 'Save changes' : 'Save variant' }}</UButton>
+        <UButton v-if="hasUnsavedChanges" class="save-action" size="sm" :loading="validator.busy.value" @click="submitSave()">{{ configs.activeProfile.value ? 'Save changes' : 'Save configuration' }}</UButton>
       </div>
       <p class="local-note">Only in this browser · no account or sync</p>
-      <form v-if="saveOpen" class="save-panel" @submit.prevent="submitSave()">
-        <label class="profile-picker">Name this configuration
-          <input ref="nameInput" v-model="profileName" type="text" maxlength="100" placeholder="e.g. Strict CI" aria-label="Configuration name">
-        </label>
-        <div class="save-buttons">
-          <UButton type="submit" size="sm" :loading="validator.busy.value">{{ validator.busy.value ? 'Validating with LinTi…' : 'Save in this browser' }}</UButton>
-          <UButton type="button" size="sm" color="neutral" variant="ghost" @click="cancelSave()">Cancel</UButton>
-        </div>
-      </form>
       <p v-if="profileError" class="error" role="alert">{{ profileError }}</p>
       <div v-if="pendingSwitch" class="switch-prompt" role="alert">
         <span>There are unsaved changes. Save them before switching?</span>
@@ -500,8 +510,8 @@ onBeforeUnmount(() => {
         <summary>Manage configurations</summary>
         <p class="muted">Profiles stay in this browser only. Clearing its data removes them; export a copy to keep them elsewhere.</p>
         <div class="library-actions">
-          <UButton v-if="configs.activeProfile.value" size="sm" color="neutral" variant="outline" @click="openSave(true)">Save as new</UButton>
-          <UButton v-if="configs.activeProfile.value" size="sm" color="neutral" variant="outline" @click="openSave()">Rename</UButton>
+          <UButton v-if="configs.activeProfile.value" size="sm" color="neutral" variant="outline" @click="openNameDialog('duplicate')">Duplicate current</UButton>
+          <UButton v-if="configs.activeProfile.value" size="sm" color="neutral" variant="outline" @click="openNameDialog('rename')">Rename</UButton>
         </div>
         <div class="library-actions">
           <UButton size="sm" color="neutral" variant="ghost" @click="downloadLibrary()">Export saved profiles</UButton>
@@ -510,6 +520,20 @@ onBeforeUnmount(() => {
         </div>
       </details>
     </section>
+    <dialog ref="nameDialog" class="name-dialog" aria-labelledby="name-dialog-title">
+      <form @submit.prevent="submitName()">
+        <h2 id="name-dialog-title">{{ nameMode === 'new' ? 'New configuration' : nameMode === 'duplicate' ? 'Duplicate configuration' : 'Rename configuration' }}</h2>
+        <p v-if="nameMode === 'new'" class="muted">Starts with an empty linti.yaml. The name is used when you save it.</p>
+        <label class="profile-picker">Configuration name
+          <input ref="nameInput" v-model="nameValue" type="text" maxlength="100" required placeholder="e.g. Strict CI" aria-label="Configuration name" @input="nameError = ''">
+        </label>
+        <p v-if="nameError" class="error" role="alert">{{ nameError }}</p>
+        <div class="save-buttons">
+          <UButton type="submit" size="sm">{{ nameMode === 'new' ? 'Create' : nameMode === 'duplicate' ? 'Duplicate' : 'Rename' }}</UButton>
+          <UButton type="button" size="sm" color="neutral" variant="ghost" @click="nameDialog?.close()">Cancel</UButton>
+        </div>
+      </form>
+    </dialog>
     <section class="presets" aria-label="Start from a use case">
       <button
         v-for="preset in presets"
@@ -655,7 +679,10 @@ onBeforeUnmount(() => {
 .profile-picker { display: flex; flex-direction: column; gap: .2rem; min-width: 0; font-size: .8rem; font-weight: 650; }
 .profile-picker select, .profile-picker input { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid var(--ui-border); border-radius: .4rem; padding: .35rem .5rem; color: var(--ui-text); background: var(--ui-bg); font-size: 1rem; }
 .local-note { margin: .5rem 0 0; color: var(--ui-text-muted); font-size: .76rem; }
-.save-panel { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .6rem; align-items: end; margin-top: .75rem; padding: .75rem; border: 1px solid var(--ui-border); border-radius: .45rem; background: var(--ui-bg); }
+.name-dialog { width: min(26rem, calc(100vw - 2rem)); max-width: none; padding: 1.2rem; border: 1px solid var(--ui-border); border-radius: .6rem; color: var(--ui-text); background: var(--ui-bg); box-shadow: 0 1rem 3rem rgb(0 0 0 / 20%); }
+.name-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+.name-dialog form { display: grid; gap: .8rem; }
+.name-dialog h2 { font-size: 1.15rem; font-weight: 700; }
 .save-buttons { justify-content: flex-end; }
 .library-more { margin-top: .75rem; padding-top: .6rem; border-top: 1px solid var(--ui-border); }
 .library-more summary { width: fit-content; cursor: pointer; color: var(--ui-primary); font-size: .82rem; font-weight: 600; }
@@ -726,7 +753,7 @@ onBeforeUnmount(() => {
   .editor :deep(.cm-editor) { height: 60vh; font-size: 1rem; }
 }
 @media (max-width: 600px) {
-  .library-primary.with-save, .save-panel { grid-template-columns: minmax(0, 1fr); }
+  .library-primary.with-save { grid-template-columns: minmax(0, 1fr); }
   .save-action { width: 100%; justify-content: center; }
   .save-buttons { justify-content: flex-start; }
 }

@@ -33,6 +33,20 @@ test('keeps multiple profiles independent and resets only a deleted active profi
   assert.equal(deleted.draft.baseId, null)
 })
 
+test('a named empty draft saves once and subsequent saves update the same profile', () => {
+  const library = emptyLibrary('recommended preset')
+  library.draft = { yaml: '', name: 'Fresh', baseId: null }
+  const created = saveProfile(library, library.draft.name, 'fresh-id', '2026-09-29')
+  assert.equal(created.profiles[0].yaml, '')
+  assert.equal(created.draft.baseId, 'fresh-id')
+
+  created.draft.yaml = 'rules:\n  indentation:\n    size: 2\n'
+  const updated = saveProfile(created, created.draft.name, 'unused-id', '2026-09-30')
+  assert.equal(updated.profiles.length, 1)
+  assert.equal(updated.profiles[0].id, 'fresh-id')
+  assert.equal(updated.profiles[0].yaml, created.draft.yaml)
+})
+
 test('new and previous share links preserve Unicode YAML and a profile name', () => {
   const yaml = '# Grüße 🌍\nrules:\n  keyword_casing:\n    enabled: false\n'
   const shared = { name: 'Meine Regeln', yaml }

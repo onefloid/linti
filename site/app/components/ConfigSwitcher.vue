@@ -49,7 +49,7 @@ function choose(event: Event) {
       </select>
     </label>
     <div v-if="showAdd || showDelete" class="switcher-actions">
-      <UButton v-if="showAdd" type="button" icon="i-lucide-plus" color="neutral" variant="outline" size="sm" aria-label="Create variant from this configuration" title="Create variant" @click="emit('add')" />
+      <UButton v-if="showAdd" type="button" icon="i-lucide-plus" color="neutral" variant="outline" size="sm" aria-label="Create empty configuration" title="New configuration" @click="emit('add')" />
       <UButton v-if="showDelete" type="button" icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" aria-label="Delete selected configuration" title="Delete selected configuration" :disabled="!selectedProfileId" @click="selectedProfileId && emit('delete', selectedProfileId)" />
     </div>
   </div>
