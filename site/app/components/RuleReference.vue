@@ -301,14 +301,14 @@ onBeforeUnmount(() => {
             <summary>Configuration used: {{ configLabel }}</summary>
             <div class="config-inspection-body">
               <p v-if="!lintiYaml.trim()" class="muted">This example uses LinTi's default configuration.</p>
-              <p v-else class="muted">This YAML is used for the run:</p>
+              <p v-if="!lintiYaml.trim() && !selected.enabled_by_default" class="muted">Running {{ selected.id }} here selects the rule explicitly, so the ‘<code>enabled: false</code>’ setting from the default config is overwritten.</p>
+              <p v-if="lintiYaml.trim()" class="muted">This YAML is used for the run:</p>
               <pre v-if="lintiYaml.trim()"><code>{{ lintiYaml }}</code></pre>
               <template v-else-if="selected.default_config">
                 <p class="muted">Default values for {{ selected.id }} in a full scan:</p>
                 <pre><code>{{ selected.default_config }}</code></pre>
               </template>
-              <p v-if="!lintiYaml.trim() && !selected.enabled_by_default" class="muted">Running {{ selected.id }} here selects the rule explicitly, so the <code>enabled: false</code> setting from the default configuration is overwritten for this run.</p>
-              <p v-else-if="lintiYaml.trim()" class="muted">Running {{ selected.id }} here selects the rule explicitly. If this YAML sets <code>enabled: false</code>, that setting is overwritten for this run.</p>
+              <p v-if="lintiYaml.trim()" class="muted">Running {{ selected.id }} here selects the rule explicitly. If this YAML sets <code>enabled: false</code>, that setting is overwritten for this run.</p>
               <button v-if="usingWorkingConfig" type="button" class="text-action" @click="useExampleSettings()">Use example settings instead</button>
             </div>
           </details>
