@@ -262,12 +262,14 @@ onBeforeUnmount(() => {
         </select>
       </label>
       <span class="spacer" />
-      <button class="secondary" :disabled="busy" title="Ctrl+Enter / ⌘Enter" @click="run()">Lint</button>
-      <button class="primary" :disabled="busy || !fixableCount" title="Ctrl+Shift+Enter / ⌘⇧Enter" @click="run(true)">
-        Auto-fix{{ fixableCount ? ` (${fixableCount})` : '' }}
-      </button>
-      <button class="secondary" @click="copyCode()">{{ copied ? 'Copied' : 'Copy' }}</button>
-      <button class="secondary" @click="downloadCode()">Download</button>
+      <div class="toolbar-actions">
+        <button class="secondary" :disabled="busy" title="Ctrl+Enter / ⌘Enter" @click="run()">Lint</button>
+        <button class="primary" :disabled="busy || !fixableCount" title="Ctrl+Shift+Enter / ⌘⇧Enter" @click="run(true)">
+          Auto-fix{{ fixableCount ? ` (${fixableCount})` : '' }}
+        </button>
+        <button class="secondary" @click="copyCode()">{{ copied ? 'Copied' : 'Copy' }}</button>
+        <button class="secondary" @click="downloadCode()">Download</button>
+      </div>
     </div>
 
     <div class="layout">
@@ -325,10 +327,11 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.playground { margin-top: 1.5rem; }
+.playground { min-width: 0; margin-top: 1.5rem; }
 .toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: end; margin-bottom: .8rem; }
 .example-picker { display: flex; flex-direction: column; gap: .25rem; font-size: .8rem; font-weight: 650; }
 .spacer { flex: 1; }
+.toolbar-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .field { border: 1px solid var(--ui-border); border-radius: .45rem; padding: .4rem .6rem; color: var(--ui-text); background: var(--ui-bg); font-weight: 400; }
 button.primary, button.secondary { padding: .45rem .85rem; border-radius: .4rem; font-size: .88rem; font-weight: 600; }
 button.primary { background: var(--ui-primary); color: white; }
@@ -336,6 +339,7 @@ button.secondary { border: 1px solid var(--ui-border); }
 button.secondary:hover { border-color: var(--ui-primary); }
 button:disabled { opacity: .55; cursor: not-allowed; }
 .layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(16rem, 2fr); gap: 1.2rem; align-items: start; }
+.editor-column { min-width: 0; }
 .editor { border: 1px solid var(--ui-border); border-radius: .5rem; overflow: hidden; background: var(--ui-bg); }
 .editor :deep(.cm-editor) { height: min(70vh, 40rem); font-size: .85rem; }
 .editor :deep(.cm-editor.cm-focused) { outline: 2px solid var(--ui-primary); outline-offset: -1px; }
@@ -371,8 +375,16 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .meta a { color: var(--ui-primary); }
 .fixable { margin-left: .3rem; padding: 0 .4rem; border-radius: 1rem; background: color-mix(in srgb, var(--ui-success) 15%, transparent); color: var(--ui-success); }
 @media (max-width: 860px) {
-  .layout { grid-template-columns: 1fr; }
+  .layout { grid-template-columns: minmax(0, 1fr); }
   .results { position: static; max-height: none; }
   .editor :deep(.cm-editor) { height: 55vh; }
+}
+@media (max-width: 600px) {
+  .toolbar { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .example-picker { min-width: 0; }
+  .example-picker .field { box-sizing: border-box; width: 100%; font-size: 1rem; }
+  .spacer { display: none; }
+  .toolbar-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .toolbar-actions button { min-width: 0; white-space: nowrap; }
 }
 </style>
