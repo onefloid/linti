@@ -300,7 +300,6 @@ onBeforeUnmount(() => {
           <details class="config-inspection">
             <summary>Configuration used: {{ configLabel }}</summary>
             <div class="config-inspection-body">
-              <p class="muted">Running {{ selected.id }} selects the rule explicitly. The <code>enabled</code> setting only controls full scans.</p>
               <p v-if="!lintiYaml.trim()" class="muted">This example uses LinTi's default configuration.</p>
               <p v-else class="muted">This YAML is used for the run:</p>
               <pre v-if="lintiYaml.trim()"><code>{{ lintiYaml }}</code></pre>
@@ -308,6 +307,7 @@ onBeforeUnmount(() => {
                 <p class="muted">Default values for {{ selected.id }} in a full scan:</p>
                 <pre><code>{{ selected.default_config }}</code></pre>
               </template>
+              <p class="muted">The Rule Reference selects {{ selected.id }} explicitly. If the YAML above says <code>enabled: false</code>, it only disables the rule in full scans.</p>
               <button v-if="usingWorkingConfig" type="button" class="text-action" @click="useExampleSettings()">Use example settings instead</button>
             </div>
           </details>
