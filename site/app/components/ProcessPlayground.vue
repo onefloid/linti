@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import type { EditorView } from '@codemirror/view'
+import plainExample from '../../../example/playground/process.ti?raw'
+import regionsExample from '../../../example/playground/process-regions.ti?raw'
+import paExample from '../../../example/playground/process-pa.ti?raw'
+import yamlExample from '../../../example/playground/process.yaml?raw'
 
 type Finding = {
   procedure: string
@@ -20,73 +24,14 @@ type Result = {
 }
 
 const examples: Record<string, { label: string, code: string }> = {
-  regions: {
-    label: '.ti with #region sections',
-    code: `#region Prolog
-sCube = 'Sales';
-if (DimensionExists('Year') = 0);
-    ProcessQuit;
-endif;
-nRows=0;
-#endregion
-#region Data
-nRows = nRows + 1;
-CellPutN(nRows, sCube, 'Total', 'Count');
-#endregion
-#region Epilog
-LogOutput('INFO', 'Rows: ' | NumberToString(nRows));
-#endregion
-`,
-  },
-  pa: {
-    label: 'PA code (#SECTION)',
-    code: `#SECTION Prolog
-cTarget = 'Sales';
-IF (pYear @= '');
-  pYear = '2026';
-endif;
-
-#SECTION Metadata
-
-#SECTION Data
-CellPutN(vValue, cTarget, pYear, vMonth);
-
-#SECTION Epilog
-
-#JSON_PROPERTIES
-{
-  "Parameters": [{"Name": "pYear", "Prompt": "", "Value": "", "Type": "String"}],
-  "DataSource": {"Type": "None"},
-  "Variables": [{"Name": "vMonth", "Type": "String"}, {"Name": "vValue", "Type": "Numeric"}],
-  "HasSecurityAccess": false
-}
-
-`,
-  },
-  yaml: {
-    label: 'TM1py YAML',
-    code: `!TM1py.ProcessObject
-Name: Load-Sales
-Parameters:
-- Name: pYear
-  Prompt: ''
-  Type: String
-  Value: ''
-PrologProcedure: |-
-  sSource = 'Sales';
-  if (pYear @= '');
-      sYear = '2026';
-  endif;
-DataProcedure: |-
-  CellPutN(1, sSource, pYear, 'Count');
-EpilogProcedure: |-
-  ExecuteCommand('cmd /c del ' | pFile, 0);
-`,
-  },
+  plain: { label: 'Plain .ti', code: plainExample },
+  regions: { label: '.ti with #region sections', code: regionsExample },
+  pa: { label: 'PA code (#SECTION)', code: paExample },
+  yaml: { label: 'TM1py YAML', code: yamlExample },
 }
 
 // Keep an edited process while moving to the configurator and back.
-const draftCode = useState('linti-playground-code', () => examples.regions!.code)
+const draftCode = useState('linti-playground-code', () => examples.plain!.code)
 
 const formatNames: Record<Result['format'], string> = {
   ti: '.ti',

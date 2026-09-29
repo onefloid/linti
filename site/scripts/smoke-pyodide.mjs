@@ -31,10 +31,11 @@ try {
   assert.equal(JSON.parse(validate('rules:\n  keyword_casing:\n    enabled: "false"\n')).valid, true);
   assert.equal(JSON.parse(validate('rules: [')).valid, false);
 
-  const paCode = await readFile(new URL('../../example/pa-code.ti', import.meta.url), 'utf8');
-  const process = JSON.parse(runPlayground(paCode, 'rules:\n  item_skip:\n    enabled: true\n', false));
+  const paCode = await readFile(new URL('../../example/playground/process-pa.ti', import.meta.url), 'utf8');
+  const process = JSON.parse(runPlayground(paCode, '', false));
   assert.equal(process.format, 'pa');
-  assert.ok(process.issues.some(issue => issue.procedure === 'data' && issue.line === 13));
+  assert.ok(process.issues.some(issue => issue.rule_id === 'F110' && issue.procedure === 'prolog' && issue.line === 4));
+  assert.ok(process.issues.some(issue => issue.rule_id === 'C220'));
   const fixedProcess = JSON.parse(runPlayground(paCode, '', true));
   assert.ok(Object.values(fixedProcess.fixes).reduce((a, b) => a + b, 0) > 0);
   assert.ok(fixedProcess.code.includes('#JSON_PROPERTIES'));
