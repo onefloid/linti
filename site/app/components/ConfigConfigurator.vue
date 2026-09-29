@@ -31,7 +31,7 @@ const nameDialog = ref<HTMLDialogElement | null>(null)
 const nameInput = ref<HTMLInputElement | null>(null)
 const nameMode = ref<'new' | 'duplicate' | 'rename'>('new')
 const nameValue = ref('')
-const newTemplate = ref('empty')
+const newTemplate = ref(presets[0]!.key)
 const nameError = ref('')
 const profileError = ref('')
 const pendingSwitch = shallowRef<(() => void) | null>(null)
@@ -214,7 +214,7 @@ function createVariant() {
 
 function openNameDialog(mode: 'new' | 'duplicate' | 'rename') {
   nameMode.value = mode
-  newTemplate.value = 'empty'
+  newTemplate.value = presets[0]!.key
   nameValue.value = mode === 'new' ? '' : mode === 'duplicate'
     ? `${configs.label.value} copy` : configs.activeProfile.value?.name ?? ''
   nameError.value = ''
@@ -239,8 +239,8 @@ function submitName() {
   }
   nameDialog.value?.close()
   if (nameMode.value === 'new') {
-    const preset = presets.find(item => item.key === newTemplate.value)
-    const source = preset ? presetText(preset) : ''
+    const preset = presets.find(item => item.key === newTemplate.value) ?? presets[0]!
+    const source = presetText(preset)
     configs.startDraft(name, source)
     setWorking(source)
   } else {
@@ -524,10 +524,6 @@ onBeforeUnmount(() => {
         </label>
         <fieldset v-if="nameMode === 'new'" class="template-options">
           <legend>Start from</legend>
-          <label class="template-option">
-            <input v-model="newTemplate" type="radio" name="new-template" value="empty">
-            <span><strong>Empty configuration</strong><small>Start with a blank linti.yaml.</small></span>
-          </label>
           <label v-for="preset in presets" :key="preset.key" class="template-option">
             <input v-model="newTemplate" type="radio" name="new-template" :value="preset.key">
             <span><strong>{{ preset.title }}</strong><small>{{ preset.description }}</small></span>
