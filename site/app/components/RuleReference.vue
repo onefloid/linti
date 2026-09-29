@@ -272,7 +272,6 @@ onBeforeUnmount(() => {
       <h2>{{ selected.name }}</h2>
       <p class="lede">{{ selected.description }}</p>
       <p v-if="selected.deprecated_by" class="notice">Deprecated; use {{ selected.deprecated_by }} instead.</p>
-      <p v-if="!selected.enabled_by_default" class="notice">This rule is disabled by default; the playground selects it explicitly.</p>
       <p v-if="selected.previous_ids.length" class="muted">Previous ID: {{ selected.previous_ids.join(', ') }}</p>
       <div v-if="selected.explanation" class="explanation">{{ selected.explanation }}</div>
 
@@ -301,11 +300,12 @@ onBeforeUnmount(() => {
           <details class="config-inspection">
             <summary>Configuration used: {{ configLabel }}</summary>
             <div class="config-inspection-body">
+              <p class="muted">Running {{ selected.id }} selects the rule explicitly. The <code>enabled</code> setting only controls full scans.</p>
               <p v-if="!lintiYaml.trim()" class="muted">This example uses LinTi's default configuration.</p>
               <p v-else class="muted">This YAML is used for the run:</p>
               <pre v-if="lintiYaml.trim()"><code>{{ lintiYaml }}</code></pre>
               <template v-else-if="selected.default_config">
-                <p class="muted">Default values for {{ selected.id }}:</p>
+                <p class="muted">Default values for {{ selected.id }} in a full scan:</p>
                 <pre><code>{{ selected.default_config }}</code></pre>
               </template>
               <button v-if="usingWorkingConfig" type="button" class="text-action" @click="useExampleSettings()">Use example settings instead</button>

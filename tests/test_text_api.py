@@ -101,6 +101,14 @@ def test_selected_rule_respects_severity_and_nesting_limits():
     assert [issue.rule_id for issue in limited.issues] == ["P900"]
 
 
+def test_selected_disabled_rule_runs_in_reference_but_not_full_scan():
+    config = "rules:\n  docstring_region:\n    enabled: false\n"
+    code = "nVar = 1;"
+
+    assert [issue.rule_id for issue in lint_rule_text(code, "prolog", "D110", config).issues] == ["D110"]
+    assert not any(issue.rule_id == "D110" for issue in lint_text(code, config).issues)
+
+
 def test_selected_rule_carries_context_and_config_warnings():
     result = lint_rule_text(
         "pFactor = 2;",
