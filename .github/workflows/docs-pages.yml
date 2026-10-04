@@ -53,6 +53,14 @@ jobs:
       - name: Generate Docus site
         working-directory: site
         run: npm run generate
+      - name: Browser regression tests
+        working-directory: site
+        run: |
+          npm install --no-save --package-lock=false @playwright/test@1.58.2
+          npx playwright install --with-deps chromium
+          mkdir -p .output/browser-test
+          ln -s ../public .output/browser-test/linti
+          npx playwright test
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
