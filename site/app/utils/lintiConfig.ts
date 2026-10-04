@@ -199,7 +199,29 @@ export function isChanged(data: Record<string, unknown>, field: FieldSpec): bool
 }
 
 export function parseConfig(text: string): ParsedConfig {
-  const doc = parseDocument(text, { prettyErrors: false })
+  // Core uses PyYAML's YAML 1.1 resolvers even with a %YAML 1.2 directive.
+  // The same schema also makes form-created strings such as "on" or "010"
+  // stay quoted when serialized, so Python keeps reading them as strings.
+  const doc = parseDocument(text, {
+    prettyErrors: false,
+    schema: 'yaml-1.1',
+    customTags: tags => tags.map(tag => {
+      if (tag.tag === 'tag:yaml.org,2002:bool') {
+        // PyYAML recognizes yes/no and on/off, but leaves bare y/n as strings.
+        return {
+          ...tag,
+          test: tag.identify?.(true)
+            ? /^(?:true|True|TRUE|yes|Yes|YES|on|On|ON)$/
+            : /^(?:false|False|FALSE|no|No|NO|off|Off|OFF)$/,
+        }
+      }
+      if (tag.tag === 'tag:yaml.org,2002:int' && !tag.format) {
+        // A leading zero is octal, not decimal; 08/09 remain strings in PyYAML.
+        return { ...tag, test: /^[-+]?(?:0|[1-9][0-9_]*)$/ }
+      }
+      return tag
+    }),
+  })
   const parseErrors = doc.errors.map(error => ({
     from: error.pos[0],
     to: Math.max(error.pos[1], error.pos[0] + 1),

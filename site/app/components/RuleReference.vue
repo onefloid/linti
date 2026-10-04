@@ -150,10 +150,11 @@ function selectRule(rule: Rule) {
   void router.replace({ query: { ...route.query, rule: rule.id, config: undefined } })
 }
 
+// Reset the example synchronously, before applyQuery applies its config mode.
 watch(selected, (rule) => {
   usingWorkingConfig.value = false
   chooseExample(rule.examples.find(example => !example.valid) || rule.examples[0])
-}, { immediate: true })
+}, { immediate: true, flush: 'sync' })
 // The page is prerendered without a query string, so URL state is applied only
 // after hydration to keep the server and client markup identical.
 function applyQuery() {
