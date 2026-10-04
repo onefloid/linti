@@ -391,7 +391,11 @@ function applyRuleQuery() {
   mobilePane.value = 'form'
   toggleCard(card, true)
   highlighted.value = card.configKey
-  void nextTick(() => document.getElementById(`rule-${card.configKey}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }))
+  // Links from the rule reference use an anchor, so Nuxt owns their scrolling.
+  // Scrolling here would race its later navigation scroll on a cached visit.
+  if (route.hash !== `#rule-${card.configKey}`) {
+    void nextTick(() => document.getElementById(`rule-${card.configKey}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }))
+  }
   setTimeout(() => (highlighted.value = ''), 2500)
 }
 
@@ -404,6 +408,8 @@ onMounted(async () => {
   yamlText.value = initial
   parsed.value = parseConfig(initial)
   openCards.value = new Set(ruleCards.filter(card => cardChanged(card)).map(card => card.configKey))
+  // Open the target before editor imports and Nuxt's post-navigation anchor scroll.
+  applyRuleQuery()
 
   const [{ EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection }, { EditorState, Annotation }, commands, lint, { yaml }, language, { tags }] = await Promise.all([
     import('@codemirror/view'),
@@ -449,7 +455,6 @@ onMounted(async () => {
     }),
   })
   pushDiagnostics()
-  applyRuleQuery()
   if (route.query.save === '1') {
     submitSave()
   }

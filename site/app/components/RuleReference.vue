@@ -73,7 +73,12 @@ function openRuleInConfigurator() {
       && !confirm('Replace the current unsaved configuration with this example?')) return
     configs.startDraft(`${selected.value.id} variant`, source)
   }
-  void navigateTo({ path: '/config', query: { from: 'rules', rule: selected.value.id } })
+  // Nuxt applies anchor scrolling after its own navigation scroll has settled.
+  void navigateTo({
+    path: '/config',
+    query: { from: 'rules', rule: selected.value.id },
+    hash: `#rule-${selected.value.config_key}`,
+  })
 }
 
 function useExampleSettings() {

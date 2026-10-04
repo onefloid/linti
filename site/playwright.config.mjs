@@ -12,7 +12,7 @@ export default defineConfig({
     { name: 'mobile', use: { ...devices['iPhone 13'], defaultBrowserType: 'chromium' } },
   ],
   webServer: {
-    command: 'python -m http.server 4173 --bind 127.0.0.1 --directory .output/browser-test',
+    command: 'python e2e/serve.py',
     url: 'http://127.0.0.1:4173/linti/',
     reuseExistingServer: !process.env.CI,
   },

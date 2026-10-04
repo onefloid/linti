@@ -100,7 +100,7 @@ test('configurator round trip restores code while using the edited working YAML'
   first.api.code.value = 'IF (x = 1);\nENDIF;'
   first.api.parameters.value = 'pFactor'
   first.api.openRuleInConfigurator()
-  assert.deepEqual(first.navigations.at(-1), { path: '/config', query: { from: 'rules', rule: 'F110' } })
+  assert.deepEqual(first.navigations.at(-1), { path: '/config', query: { from: 'rules', rule: 'F110' }, hash: '#rule-keyword_casing' })
   first.unmount()
 
   // The configurator edits the shared YAML, then returns with config=working.
@@ -134,4 +134,23 @@ test('route changes keep their config mode and explicit rule selection returns t
   assert.equal(api.selected.value.id, 'C150')
   assert.equal(api.usingWorkingConfig.value, false)
   assert.equal(route.query.config, undefined)
+})
+
+test('each configurator visit carries the rule anchor without replacing working edits', async (t) => {
+  const draft = ref(null)
+  const yaml = ref('')
+  for (let visit = 0; visit < 3; visit++) {
+    const query = visit === 0 ? { rule: 'F110' } : { rule: 'F110', config: 'working' }
+    const reference = await mountReference(t, query, { draft, yaml })
+    const before = yaml.value
+    reference.api.openRuleInConfigurator()
+    assert.deepEqual(reference.navigations.at(-1), {
+      path: '/config',
+      query: { from: 'rules', rule: 'F110' },
+      hash: '#rule-keyword_casing',
+    })
+    if (visit > 0) assert.equal(yaml.value, before)
+    reference.unmount()
+    yaml.value = `# Edit ${visit + 1}\nrules:\n  keyword_casing:\n    style: lowercase\n`
+  }
 })
