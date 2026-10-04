@@ -206,6 +206,7 @@ export function parseConfig(text: string): ParsedConfig {
     prettyErrors: false,
     schema: 'yaml-1.1',
     customTags: tags => tags.map(tag => {
+      if (typeof tag === 'string') return tag
       if (tag.tag === 'tag:yaml.org,2002:bool') {
         // PyYAML recognizes yes/no and on/off, but leaves bare y/n as strings.
         return {
