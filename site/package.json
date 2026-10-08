@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "nuxt dev",
-    "generate": "python scripts/export_rule_reference.py && nuxt generate",
+    "generate": "cd .. && python scripts/export_rule_reference.py && cd site && nuxt generate",
     "test:unit": "node --test tests/*.test.mjs",
     "typecheck": "node scripts/typecheck.mjs"
   },
