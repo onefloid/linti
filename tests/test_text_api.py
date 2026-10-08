@@ -112,10 +112,14 @@ def test_config_warnings_are_returned():
     assert any("loud" in warning for warning in result.warnings)
 
 
-@pytest.mark.parametrize("config_text", ["rules: [", "- just\n- a list\n"])
-def test_invalid_config_text_raises_value_error(config_text):
+def test_invalid_config_text_raises_value_error_for_parse_error():
     with pytest.raises(ValueError, match="Invalid linti.yaml"):
-        config_from_text(config_text)
+        config_from_text("rules: [")
+
+
+def test_invalid_config_text_raises_type_error_for_list():
+    with pytest.raises(TypeError, match="Invalid linti.yaml.*expected a mapping"):
+        config_from_text("- just\n- a list\n")
 
 
 def test_empty_config_text_uses_defaults():

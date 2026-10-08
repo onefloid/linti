@@ -11,7 +11,7 @@ import tempfile
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
 import yaml
 
@@ -19,7 +19,7 @@ from linti.config import Config, LintiConfigWarning
 from linti.linter.api import lint_process, lint_process_model, linter_from_config
 from linti.linter.fixer import auto_fix_process
 from linti.linter.reporter import adjust_line_numbers_in_message, filter_by_severity
-from linti.model.process_ir import ProcessIR, ProcedureInfo
+from linti.model.process_ir import ProcedureInfo, ProcessIR
 from linti.provider.base import require_single_process_name
 from linti.provider.factory import provider_for_path
 from linti.provider.pa_code import is_pa_code_content
@@ -86,7 +86,7 @@ def detect_format(text: str) -> TextFormat:
     return "ti"
 
 
-def config_from_text(config_text: Optional[str]) -> Config:
+def config_from_text(config_text: str | None) -> Config:
     """Build a :class:`Config` from ``linti.yaml`` content (empty → defaults)."""
     if not config_text or not config_text.strip():
         return Config()
@@ -97,7 +97,7 @@ def config_from_text(config_text: Optional[str]) -> Config:
     if data is None:
         return Config()
     if not isinstance(data, dict):
-        raise ValueError("Invalid linti.yaml: expected a mapping at the top level")
+        raise TypeError("Invalid linti.yaml: expected a mapping at the top level")
     config_path = Path("linti.yaml")
     Config._warn_about_removed_rule_configs(data, config_path)
     Config._warn_about_moved_rule_configs(data, config_path)
@@ -114,13 +114,13 @@ def lint_rule_text(
     source: str,
     procedure: str,
     rule_id: str,
-    config_text: Optional[str] = None,
+    config_text: str | None = None,
     *,
     auto_fix: bool = False,
-    parameters: Optional[list[str]] = None,
-    variables: Optional[list[str]] = None,
-    datasource_type: Optional[str] = None,
-    datasource_query: Optional[str] = None,
+    parameters: list[str] | None = None,
+    variables: list[str] | None = None,
+    datasource_type: str | None = None,
+    datasource_query: str | None = None,
 ) -> RuleTextResult:
     """Lint a selected rule using the same limits and severity filter as lint_text."""
     if procedure not in {"prolog", "metadata", "data", "epilog"}:
@@ -140,7 +140,9 @@ def lint_rule_text(
             **{procedure: ProcedureInfo(code=source)},
         )
         fixes = sum(auto_fix_process(process, linter).values()) if auto_fix else 0
-        issues = filter_by_severity(lint_process_model(process, linter), cfg.min_severity)
+        issues = filter_by_severity(
+            lint_process_model(process, linter), cfg.min_severity
+        )
 
     return RuleTextResult(
         code=getattr(process, procedure).code,
@@ -163,9 +165,9 @@ def lint_rule_text(
 
 def lint_text(
     text: str,
-    config_text: Optional[str] = None,
+    config_text: str | None = None,
     auto_fix: bool = False,
-    select: Optional[str] = None,
+    select: str | None = None,
 ) -> TextLintResult:
     """Lint (and optionally auto-fix) a whole process given as *text*.
 
