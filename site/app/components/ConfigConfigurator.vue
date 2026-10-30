@@ -400,6 +400,13 @@ function applyRuleQuery() {
 }
 
 watch(() => route.query.rule, applyRuleQuery)
+// A share link pasted into the open page replaces the draft outside the editor.
+watch(configs.yaml, (text) => {
+  if (text === yamlText.value) return
+  clearTimeout(parseTimer)
+  parseTimer = undefined
+  setWorking(text)
+})
 
 onMounted(async () => {
   // Nothing is stored until the visitor changes something: the recommended
@@ -433,7 +440,8 @@ onMounted(async () => {
   view = new EditorView({
     parent: editorHost.value!,
     state: EditorState.create({
-      doc: initial,
+      // The draft can change while the editor modules load.
+      doc: yamlText.value,
       extensions: [
         lineNumbers(),
         highlightActiveLineGutter(),

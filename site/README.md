@@ -13,6 +13,9 @@ from `Field(description=...)`), the defaults, and the use-case presets from
 only settings that differ from the defaults. The configurator, the playground
 and the rule reference share local drafts and named configurations via
 `useConfigLibrary()`, which uses `localStorage` and `#config=` share links.
+Every write is merged into the library stored at that moment, and other tabs'
+writes arrive through the `storage` event, so tabs never drop each other's
+profiles. A share link pasted into an already open page is imported as well.
 
 `scripts/generate_all_rules.py` regenerates both `app/data/*.json` files; never
 edit them by hand.
@@ -29,9 +32,12 @@ npm run dev
 ```
 
 Run `npm run generate` to build the static site in `.output/public`. All Pyodide
-assets are self-hosted. The Pages workflow runs the above preparation steps on
-`main` and same-repository pull requests, runs `npm run test:unit` and
-`npm run typecheck`, and deploys the resulting site under `/linti/`.
+assets are self-hosted. The Pages workflow runs the above preparation steps,
+`npm run test:unit`, `npm run typecheck` and the Playwright tests on pull
+requests and `main`, but deploys only from `main`, under `/linti/`. Canonical
+URLs, `og:url` and the sitemap use `https://onefloid.github.io/linti`
+(`nuxt.config.ts`). Docus' MCP server is disabled, since a static Pages build
+cannot serve it.
 
 The rule reference intentionally keeps `ALL_RULES.md` for existing GitHub links.
 Once this site is established, the old Markdown generator can be retired

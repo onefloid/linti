@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { decodeSharedConfig, emptyLibrary, encodeSharedConfig, migrateLegacy, parseLibrary, removeProfile, saveProfile } from '../app/utils/configLibrary.ts'
+import { decodeSharedConfig, emptyLibrary, encodeSharedConfig, mergeLibrary, migrateLegacy, parseLibrary, removeProfile, saveProfile } from '../app/utils/configLibrary.ts'
 
 test('migrates the previous browser YAML without losing its content', () => {
   const yaml = 'rules:\n  keyword_casing:\n    enabled: false\n'
@@ -55,4 +55,50 @@ test('new and previous share links preserve Unicode YAML and a profile name', ()
   assert.deepEqual(decodeSharedConfig(`#config=${legacy}`), { name: 'Shared configuration', yaml })
   assert.equal(decodeSharedConfig('#config=v1.not-json'), null)
   assert.equal(decodeSharedConfig(`#config=${'a'.repeat(8001)}`), null)
+})
+
+const profile = (id, name, yaml = `# ${name}\n`) => ({ id, name, yaml, createdAt: '2026-10-01', updatedAt: '2026-10-01' })
+const library = (profiles, draft = { yaml: '', baseId: null, name: '' }) => ({ version: 1, profiles, draft })
+const ids = () => { let next = 0; return () => `new-${++next}` }
+
+test('a stale tab keeps profiles another tab saved meanwhile', () => {
+  const alpha = profile('a', 'Alpha')
+  // Tab B loaded [Alpha], tab A then stored Beta; B only changed its draft.
+  const stored = library([alpha, profile('b', 'Beta')])
+  const local = library([alpha], { yaml: '# F110 variant\n', baseId: null, name: 'F110 variant' })
+  const merged = mergeLibrary([alpha], local, stored, ids())
+  assert.deepEqual(merged.profiles.map(item => item.name), ['Alpha', 'Beta'])
+  assert.deepEqual(merged.draft, local.draft)
+})
+
+test('local edits, additions and deletions replay onto the stored library', () => {
+  const base = [profile('a', 'Alpha'), profile('b', 'Beta'), profile('c', 'Gamma')]
+  const stored = library([...base, profile('d', 'Delta')])
+  const local = library([{ ...base[0], yaml: '# edited\n' }, base[2], profile('e', 'Epsilon')])
+  const merged = mergeLibrary(base, local, stored, ids())
+  assert.deepEqual(merged.profiles.map(item => item.id), ['a', 'c', 'd', 'e'])
+  assert.equal(merged.profiles[0].yaml, '# edited\n')
+})
+
+test('concurrent edits and deletions never lose either version', () => {
+  const base = [profile('a', 'Alpha'), profile('b', 'Beta')]
+  // Elsewhere: Alpha edited, Beta deleted. Here: Alpha edited differently, Beta edited.
+  const stored = library([{ ...base[0], yaml: '# theirs\n' }])
+  const local = library([{ ...base[0], yaml: '# mine\n' }, { ...base[1], yaml: '# kept\n' }], { yaml: '# mine\n', baseId: 'a', name: 'Alpha' })
+  const merged = mergeLibrary(base, local, stored, ids())
+  assert.deepEqual(merged.profiles.map(item => [item.name, item.yaml]), [
+    ['Alpha', '# theirs\n'],
+    ['Alpha (this tab)', '# mine\n'],
+    ['Beta', '# kept\n'],
+  ])
+  assert.deepEqual(merged.draft, { yaml: '# mine\n', baseId: 'new-1', name: 'Alpha (this tab)' })
+})
+
+test('a deletion elsewhere wins over an untouched local copy, and duplicate names are renamed', () => {
+  const base = [profile('a', 'Alpha')]
+  const stored = library([profile('x', 'Beta')])
+  const local = library([base[0], profile('y', 'beta')], { yaml: '# beta\n', baseId: 'y', name: 'beta' })
+  const merged = mergeLibrary(base, local, stored, ids())
+  assert.deepEqual(merged.profiles.map(item => item.name), ['Beta', 'beta (2)'])
+  assert.equal(merged.draft.name, 'beta (2)')
 })

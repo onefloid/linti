@@ -73,6 +73,59 @@ export function removeProfile(library: ConfigLibrary, id: string, defaultYaml: s
   }
 }
 
+function sameProfile(a: SavedConfig, b: SavedConfig): boolean {
+  return a.name === b.name && a.yaml === b.yaml
+}
+
+/**
+ * Three-way merge of this tab's library into what another tab stored meanwhile.
+ * `base` is the stored profile list this tab last read or wrote. Changes made
+ * here are replayed onto `stored`, so profiles another tab added, edited or
+ * deleted survive. When both tabs changed the same profile, the stored version
+ * stays and this tab's version is kept as a renamed copy.
+ */
+export function mergeLibrary(base: SavedConfig[], local: ConfigLibrary, stored: ConfigLibrary, newId: () => string): ConfigLibrary {
+  const baseById = new Map(base.map(profile => [profile.id, profile]))
+  const localIds = new Set(local.profiles.map(profile => profile.id))
+  let profiles = stored.profiles.filter((theirs) => {
+    const old = baseById.get(theirs.id)
+    // Deleted here, and untouched elsewhere since this tab last synced.
+    return localIds.has(theirs.id) || !old || !sameProfile(old, theirs)
+  })
+  const added = new Set<string>()
+  let draft = local.draft
+  for (const mine of local.profiles) {
+    const old = baseById.get(mine.id)
+    if (old && sameProfile(old, mine)) continue
+    const theirs = profiles.find(profile => profile.id === mine.id)
+    if (!theirs) {
+      // New here, or edited here while another tab deleted it: keep the edit.
+      profiles = [...profiles, mine]
+      added.add(mine.id)
+    } else if (!old || sameProfile(old, theirs)) {
+      profiles = profiles.map(profile => profile.id === mine.id ? mine : profile)
+    } else if (!sameProfile(theirs, mine)) {
+      const copy = { ...mine, id: newId(), name: `${mine.name} (this tab)` }
+      profiles = [...profiles, copy]
+      added.add(copy.id)
+      if (draft.baseId === mine.id) draft = { ...draft, baseId: copy.id, name: copy.name }
+    }
+  }
+  // Two tabs can create the same name independently; rename this tab's one.
+  const names = new Set(profiles.filter(profile => !added.has(profile.id)).map(profile => profile.name.toLowerCase()))
+  profiles = profiles.map((profile) => {
+    if (!added.has(profile.id)) return profile
+    let name = profile.name
+    let suffix = 2
+    while (names.has(name.toLowerCase())) name = `${profile.name} (${suffix++})`
+    names.add(name.toLowerCase())
+    if (name === profile.name) return profile
+    if (draft.baseId === profile.id) draft = { ...draft, name }
+    return { ...profile, name }
+  })
+  return { version: 1, profiles, draft }
+}
+
 function encode(text: string): string {
   let binary = ''
   for (const byte of new TextEncoder().encode(text)) binary += String.fromCharCode(byte)

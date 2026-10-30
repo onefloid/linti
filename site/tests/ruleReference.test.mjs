@@ -20,7 +20,7 @@ const bundle = await build({
         const { ref, computed, watch, nextTick, onMounted, onBeforeUnmount,
           useConfigLibrary, useRoute, useRouter, useState, useLintiWorker, navigateTo } = hooks
         ${body}
-        return { selected, code, parameters, lintiYaml, usingWorkingConfig,
+        return { selected, group, code, parameters, lintiYaml, usingWorkingConfig,
           openRuleInConfigurator, selectRule, useExampleSettings, run }
       }`,
     loader: 'ts',
@@ -153,4 +153,29 @@ test('each configurator visit carries the rule anchor without replacing working 
     reference.unmount()
     yaml.value = `# Edit ${visit + 1}\nrules:\n  keyword_casing:\n    style: lowercase\n`
   }
+})
+
+test('clearing a deep-linked category keeps the next selected rule visible', async (t) => {
+  const { api, route } = await mountReference(t, { group: 'F' })
+  assert.equal(api.group.value, 'F')
+  assert.equal(api.selected.value.group, 'F')
+
+  api.group.value = 'all'
+  await nextTick()
+  assert.equal(route.query.group, undefined)
+  api.selectRule({ id: 'C150' })
+  await nextTick()
+  assert.equal(api.group.value, 'all')
+  assert.equal(api.selected.value.id, 'C150')
+
+  api.group.value = 'F'
+  await nextTick()
+  assert.equal(route.query.group, 'F')
+  assert.equal(api.selected.value.id, 'C150', 'filtering alone does not change the selected rule')
+})
+
+test('a rule outside the linked category clears the filter', async (t) => {
+  const { api } = await mountReference(t, { group: 'F', rule: 'C150' })
+  assert.equal(api.selected.value.id, 'C150')
+  assert.equal(api.group.value, 'all')
 })

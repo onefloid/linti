@@ -162,19 +162,26 @@ watch(selected, (rule) => {
 }, { immediate: true, flush: 'sync' })
 // The page is prerendered without a query string, so URL state is applied only
 // after hydration to keep the server and client markup identical.
-function applyQuery() {
+function applyQuery(initial = false) {
   const letter = String(route.query.group || '').toUpperCase()
+  const id = String(route.query.rule || '').toUpperCase()
+  const rule = allRules.find(item => item.id === id)
   if (groups.includes(letter)) {
     group.value = letter
-    if (selected.value.group !== letter) selectedId.value = allRules.find(rule => rule.group === letter)!.id
+    // A bare ?group= link opens on that category's first rule.
+    if (initial && !rule && selected.value.group !== letter) selectedId.value = allRules.find(item => item.group === letter)!.id
   }
-  const id = String(route.query.rule || '').toUpperCase()
-  if (allRules.some(rule => rule.id === id)) selectedId.value = id
+  if (rule) {
+    const opened = initial || selectedId.value !== rule.id
+    selectedId.value = rule.id
+    // A linked rule must not open hidden behind another category's filter.
+    if (opened && group.value !== 'all' && group.value !== rule.group) group.value = 'all'
+  }
   if (route.query.config === 'working') usingWorkingConfig.value = true
 }
 
 onMounted(async () => {
-  applyQuery()
+  applyQuery(true)
   await nextTick()
   const previous = draft.value
   if (!previous || previous.ruleId !== selectedId.value) return
@@ -192,7 +199,14 @@ onMounted(async () => {
     datasource: datasourceType.value || datasourceQuery.value,
   })[field])
 })
-watch(() => [route.query.rule, route.query.group], applyQuery)
+watch(() => [route.query.rule, route.query.group], () => applyQuery())
+// The URL follows the category filter, so a later rule change cannot restore a stale ?group=.
+watch(group, (value) => {
+  const wanted = value === 'all' ? undefined : value
+  if (String(route.query.group || '').toUpperCase() !== (wanted ?? '')) {
+    void router.replace({ query: { ...route.query, group: wanted } })
+  }
+})
 watch(() => route.query.config, value => (usingWorkingConfig.value = value === 'working'))
 
 watch([code, procedure, selectedId, lintiYaml, parameters, variables, datasourceType, datasourceQuery], worker.invalidate)

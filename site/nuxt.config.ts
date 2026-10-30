@@ -1,3 +1,8 @@
+// The public URL including the GitHub Pages subpath. Docus builds canonical and
+// og:url as site.url + route path, and its sitemap reads only NUXT_SITE_URL.
+const siteUrl = 'https://onefloid.github.io/linti'
+process.env.NUXT_SITE_URL ||= siteUrl
+
 export default defineNuxtConfig({
   extends: ['docus'],
   compatibilityDate: '2025-07-18',
@@ -6,10 +11,15 @@ export default defineNuxtConfig({
   },
   site: {
     name: 'LinTi',
-    url: 'https://onefloid.github.io',
+    url: siteUrl,
   },
   robots: {
     robotsTxt: false,
+  },
+  // A static Pages build has no server for the MCP endpoint, so the header
+  // menu's MCP entries are removed too (components/docs/DocsPageHeaderLinks.vue).
+  mcp: {
+    enabled: false,
   },
   nitro: {
     prerender: {
