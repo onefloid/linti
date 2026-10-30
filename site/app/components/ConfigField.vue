@@ -51,7 +51,7 @@ function onInteger(raw: string | number) {
       <span v-if="changed" class="changed-badge">changed</span>
       <UButton
         v-if="changed"
-        size="xs"
+        size="sm"
         color="neutral"
         variant="ghost"
         icon="i-lucide-rotate-ccw"
@@ -120,4 +120,7 @@ function onInteger(raw: string | number) {
 .field-issue { margin-top: .25rem; font-size: .8rem; overflow-wrap: anywhere; }
 .field-issue.error { color: var(--ui-error); }
 .field-issue.warning { color: var(--ui-warning); }
+@media (pointer: coarse) {
+  .field-head :deep(button[aria-label^="Reset"]) { min-width: 2.75rem; min-height: 2.75rem; justify-content: center; }
+}
 </style>

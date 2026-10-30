@@ -92,9 +92,9 @@ function startSync(library: Ref<ConfigLibrary>, loaded: Ref<boolean>, storageErr
     const route = router.currentRoute.value
     void router.replace({ path: route.path, query: route.query, hash: '' })
     if (!shared) return
-    if (hasUnsavedDraft(library.value) && library.value.draft.yaml !== shared.yaml
-      && !confirm(`Replace the current unsaved configuration with the shared "${shared.name}"?`)) return
-    library.value.draft = { yaml: shared.yaml, baseId: null, name: shared.name }
+    const apply = () => (library.value.draft = { yaml: shared.yaml, baseId: null, name: shared.name })
+    if (!hasUnsavedDraft(library.value) || library.value.draft.yaml === shared.yaml) apply()
+    else void useConfirm().ask(`Replace the current unsaved configuration with the shared "${shared.name}"?`).then(ok => ok && apply())
   }
 
   effectScope(true).run(() => {

@@ -18,7 +18,7 @@ const bundle = await build({
       import { presets, presetText } from '../utils/lintiConfig'
       export function setupReference(hooks) {
         const { ref, computed, watch, nextTick, onMounted, onBeforeUnmount,
-          useConfigLibrary, useRoute, useRouter, useState, useLintiWorker, navigateTo } = hooks
+          useConfigLibrary, useConfirm, useRoute, useRouter, useState, useLintiWorker, navigateTo } = hooks
         ${body}
         return { selected, group, code, parameters, lintiYaml, usingWorkingConfig,
           openRuleInConfigurator, selectRule, useExampleSettings, run }
@@ -62,6 +62,7 @@ async function mountReference(t, query, { draft = ref(null), yaml = ref('') } = 
     onMounted: callback => mounts.push(callback),
     onBeforeUnmount: callback => unmounts.push(callback),
     useConfigLibrary: () => configs,
+    useConfirm: () => ({ ask: async () => true }),
     useRoute: () => route,
     useRouter: () => ({ replace: ({ query }) => { route.query = query } }),
     useState: () => draft,

@@ -17,6 +17,12 @@ Every write is merged into the library stored at that moment, and other tabs'
 writes arrive through the `storage` event, so tabs never drop each other's
 profiles. A share link pasted into an already open page is imported as well.
 
+The three tools lay themselves out by the width Docus gives them (CSS
+container queries on `.lint-tool`), not by the viewport, and take the full
+page width (`app/app.css`). Confirmations go through `useConfirm()` and
+`<ConfirmDialog>` rather than `window.confirm()`. `e2e/layout.spec.mjs` checks
+phone, tablet and desktop widths.
+
 `scripts/generate_all_rules.py` regenerates both `app/data/*.json` files; never
 edit them by hand.
 

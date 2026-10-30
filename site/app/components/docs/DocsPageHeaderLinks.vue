@@ -1,5 +1,6 @@
-<!-- Docus 5.13.0's page header menu without the MCP entries: the static
-     GitHub Pages build has no /mcp endpoint. Re-sync on Docus upgrades. -->
+<!-- Docus 5.13.0's page header menu without the MCP entries (the static
+     GitHub Pages build has no /mcp endpoint) and hidden on the tool pages.
+     Re-sync on Docus upgrades. -->
 <script setup lang="ts">
 import { useClipboard } from '@vueuse/core'
 import { withTrailingSlash } from 'ufo'
@@ -11,6 +12,9 @@ const appBaseURL = runtimeConfig.app?.baseURL || '/'
 
 const { copy, copied } = useClipboard()
 const { t } = useDocusI18n()
+
+// The interactive tool pages have no prose worth copying into a chat.
+const toolPage = computed(() => ['/playground', '/rules', '/config'].includes(route.path.replace(/\/$/, '')))
 
 const markdownLink = computed(() => `${window?.location?.origin}${withTrailingSlash(appBaseURL)}raw${route.path}.md`)
 const items = computed(() => [
@@ -48,7 +52,7 @@ async function copyPage() {
 </script>
 
 <template>
-  <UFieldGroup size="sm">
+  <UFieldGroup v-if="!toolPage" size="sm">
     <UButton
       :label="t('docs.copy.page')"
       :icon="copied ? 'i-lucide-check' : 'i-lucide-copy'"

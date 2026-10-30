@@ -47,6 +47,8 @@ test('a share link pasted into the open configurator replaces the draft', async 
   await expect(editor).toContainText('# v11')
 
   await page.evaluate(hash => { location.hash = hash }, shareHash('v12', '# v12\n'))
+  // v11 is an unsaved draft, so replacing it asks first.
+  await page.getByRole('dialog').getByRole('button', { name: 'Replace' }).click()
   await expect(editor).toContainText('# v12')
   await expect(page).toHaveURL(url => !url.hash)
 

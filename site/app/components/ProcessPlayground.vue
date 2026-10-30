@@ -121,7 +121,15 @@ function jumpTo(issue: Finding) {
   if (!view) return
   const { from, to } = lineRange(issue.line, issue.column)
   view.dispatch({ selection: { anchor: from, head: to }, scrollIntoView: true })
-  view.focus()
+  // On touch screens focusing would open the keyboard over the code.
+  if (matchMedia('(pointer: fine)').matches) view.focus()
+  else editorHost.value?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+const resultsPanel = ref<HTMLElement | null>(null)
+
+function showResults() {
+  resultsPanel.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 function loadExample(key: string) {
@@ -197,96 +205,103 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="playground">
-    <div class="toolbar">
-      <label class="example-picker">
-        <span>Load example</span>
-        <select class="field" @change="loadExample(($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''">
-          <option value="">Choose…</option>
-          <option v-for="(example, key) in examples" :key="key" :value="key">{{ example.label }}</option>
-        </select>
-      </label>
-      <span class="spacer" />
-      <div class="toolbar-actions">
-        <button class="secondary" :disabled="busy" title="Ctrl+Enter / ⌘Enter" @click="run()">Lint</button>
-        <button class="primary" :disabled="busy || !fixableCount" title="Ctrl+Shift+Enter / ⌘⇧Enter" @click="run(true)">
-          Auto-fix{{ fixableCount ? ` (${fixableCount})` : '' }}
+  <div class="lint-tool">
+    <ConfirmDialog />
+    <div class="playground">
+      <div class="toolbar">
+        <label class="example-picker">
+          <span>Load example</span>
+          <select class="field" @change="loadExample(($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''">
+            <option value="">Choose…</option>
+            <option v-for="(example, key) in examples" :key="key" :value="key">{{ example.label }}</option>
+          </select>
+        </label>
+        <span class="spacer" />
+        <div class="toolbar-actions">
+          <UButton color="neutral" variant="outline" icon="i-lucide-play" :disabled="busy" title="Ctrl+Enter / ⌘Enter" @click="run()">Lint</UButton>
+          <UButton icon="i-lucide-wand-sparkles" :disabled="busy || !fixableCount" title="Ctrl+Shift+Enter / ⌘⇧Enter" @click="run(true)">
+            Auto-fix{{ fixableCount ? ` (${fixableCount})` : '' }}
+          </UButton>
+          <UButton color="neutral" variant="ghost" icon="i-lucide-copy" @click="copyCode()">{{ copied ? 'Copied' : 'Copy' }}</UButton>
+          <UButton color="neutral" variant="ghost" icon="i-lucide-download" @click="downloadCode()">Download</UButton>
+        </div>
+        <!-- Stacked layout: the findings are below the editor, out of sight. -->
+        <button v-if="result && !loading" type="button" class="result-jump" @click="showResults()">
+          <strong>{{ result.issues.length }}</strong> finding{{ result.issues.length === 1 ? '' : 's' }}<template v-if="fixableCount"> · {{ fixableCount }} auto-fixable</template>
+          <span aria-hidden="true">↓</span>
         </button>
-        <button class="secondary" @click="copyCode()">{{ copied ? 'Copied' : 'Copy' }}</button>
-        <button class="secondary" @click="downloadCode()">Download</button>
-      </div>
-    </div>
-
-    <div class="layout">
-      <div class="editor-column">
-        <div ref="editorHost" class="editor" />
-        <details class="config" :open="configs.status.value !== 'defaults'">
-          <summary>
-            Configuration: {{ configs.label.value }}
-            <span class="badge">{{ configs.status.value === 'draft' ? 'unsaved local draft' : configs.status.value === 'saved' ? 'saved in this browser' : 'LinTi defaults' }}</span>
-          </summary>
-          <pre class="config-editor"><code>{{ configText }}</code></pre>
-          <p class="config-hint">
-            Configure or save this YAML in the <NuxtLink :to="{ path: '/config', query: { from: 'playground' } }">configurator</NuxtLink>.
-          </p>
-        </details>
       </div>
 
-      <section class="results" aria-live="polite" aria-label="Findings">
-        <p v-if="loading" class="status">Loading LinTi in your browser… the first run downloads Pyodide.</p>
-        <template v-else-if="result">
-          <p class="status">
-            <span class="badge">{{ formatNames[result.format] }}</span>
-            <span class="badge">{{ result.process_name }}</span>
-            <span v-if="busy" class="muted">checking…</span>
-          </p>
-          <p class="summary">
-            <strong>{{ result.issues.length }}</strong> finding{{ result.issues.length === 1 ? '' : 's' }}
-            <span v-if="result.issues.length" class="muted">
-              · {{ errorCount }} error{{ errorCount === 1 ? '' : 's' }}, {{ warningCount }} warning{{ warningCount === 1 ? '' : 's' }}, {{ fixableCount }} auto-fixable
-            </span>
-          </p>
-        </template>
-        <p v-if="fixSummary" class="success">{{ fixSummary }}</p>
-        <p v-if="error" role="alert" class="error">{{ error }}</p>
-        <ul v-if="result?.warnings.length" class="warnings">
-          <li v-for="(warning, index) in result.warnings" :key="index">{{ warning }}</li>
-        </ul>
-        <p v-if="result && !result.issues.length && !error" class="success">No findings. 🎉</p>
-        <ol v-if="result?.issues.length" class="issues">
-          <li v-for="(issue, index) in result.issues" :key="index" :class="`severity-${issue.severity}`">
-            <button class="issue" @click="jumpTo(issue)">
-              <span class="location">{{ issue.line }}:{{ issue.column }}</span>
-              <span class="message">{{ issue.message }}</span>
-            </button>
-            <span class="meta">
-              <a :href="ruleLink(issue.rule_id)" target="_blank" rel="noopener"><code>{{ issue.rule_id }}</code></a>
-              · {{ issue.procedure }}
-              <span v-if="issue.fixable" class="fixable">auto-fix</span>
-            </span>
-          </li>
-        </ol>
-      </section>
+      <div class="layout">
+        <div class="editor-column">
+          <div ref="editorHost" class="editor" />
+          <details class="config" :open="configs.status.value !== 'defaults'">
+            <summary>
+              Configuration: {{ configs.label.value }}
+              <span class="badge">{{ configs.status.value === 'draft' ? 'unsaved local draft' : configs.status.value === 'saved' ? 'saved in this browser' : 'LinTi defaults' }}</span>
+            </summary>
+            <pre class="config-editor"><code>{{ configText }}</code></pre>
+            <p class="config-hint">
+              Configure or save this YAML in the <NuxtLink :to="{ path: '/config', query: { from: 'playground' } }">configurator</NuxtLink>.
+            </p>
+          </details>
+        </div>
+
+        <section ref="resultsPanel" class="results" aria-live="polite" aria-label="Findings">
+          <p v-if="loading" class="status">Loading LinTi in your browser… the first run downloads Pyodide.</p>
+          <template v-else-if="result">
+            <p class="status">
+              <span class="badge">{{ formatNames[result.format] }}</span>
+              <span class="badge">{{ result.process_name }}</span>
+              <span v-if="busy" class="muted">checking…</span>
+            </p>
+            <p class="summary">
+              <strong>{{ result.issues.length }}</strong> finding{{ result.issues.length === 1 ? '' : 's' }}
+              <span v-if="result.issues.length" class="muted">
+                · {{ errorCount }} error{{ errorCount === 1 ? '' : 's' }}, {{ warningCount }} warning{{ warningCount === 1 ? '' : 's' }}, {{ fixableCount }} auto-fixable
+              </span>
+            </p>
+          </template>
+          <p v-if="fixSummary" class="success">{{ fixSummary }}</p>
+          <p v-if="error" role="alert" class="error">{{ error }}</p>
+          <ul v-if="result?.warnings.length" class="warnings">
+            <li v-for="(warning, index) in result.warnings" :key="index">{{ warning }}</li>
+          </ul>
+          <p v-if="result && !result.issues.length && !error" class="success">No findings. 🎉</p>
+          <ol v-if="result?.issues.length" class="issues">
+            <li v-for="(issue, index) in result.issues" :key="index" :class="`severity-${issue.severity}`">
+              <button class="issue" @click="jumpTo(issue)">
+                <span class="location">{{ issue.line }}:{{ issue.column }}</span>
+                <span class="message">{{ issue.message }}</span>
+              </button>
+              <span class="meta">
+                <a :href="ruleLink(issue.rule_id)" target="_blank" rel="noopener"><code>{{ issue.rule_id }}</code></a>
+                · {{ issue.procedure }}
+                <span v-if="issue.fixable" class="fixable">auto-fix</span>
+              </span>
+            </li>
+          </ol>
+        </section>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.playground { min-width: 0; margin-top: 1.5rem; }
+.lint-tool { container-type: inline-size; }
+.playground { min-width: 0; }
 .toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: end; margin-bottom: .8rem; }
 .example-picker { display: flex; flex-direction: column; gap: .25rem; font-size: .8rem; font-weight: 650; }
 .spacer { flex: 1; }
 .toolbar-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
-.field { border: 1px solid var(--ui-border); border-radius: .45rem; padding: .4rem .6rem; color: var(--ui-text); background: var(--ui-bg); font-weight: 400; }
-button.primary, button.secondary { padding: .45rem .85rem; border-radius: .4rem; font-size: .88rem; font-weight: 600; }
-button.primary { background: var(--ui-primary); color: white; }
-button.secondary { border: 1px solid var(--ui-border); }
-button.secondary:hover { border-color: var(--ui-primary); }
-button:disabled { opacity: .55; cursor: not-allowed; }
+/* Native select: the phone's own picker is the most usable one there. */
+.field { min-height: 2.25rem; border: 1px solid var(--ui-border-accented); border-radius: .4rem; padding: .4rem .6rem; color: var(--ui-text); background: var(--ui-bg); font-weight: 400; }
+.result-jump { display: none; width: 100%; padding: .55rem .8rem; border: 1px solid var(--ui-border); border-radius: .45rem; background: var(--ui-bg-elevated); text-align: left; font-size: .9rem; }
+.result-jump span { float: right; color: var(--ui-text-muted); }
 .layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(16rem, 2fr); gap: 1.2rem; align-items: start; }
 .editor-column { min-width: 0; }
 .editor { border: 1px solid var(--ui-border); border-radius: .5rem; overflow: hidden; background: var(--ui-bg); }
-.editor :deep(.cm-editor) { height: min(70vh, 40rem); font-size: .85rem; }
+.editor :deep(.cm-editor) { height: min(70vh, 40rem); height: min(70dvh, 40rem); font-size: .85rem; }
 .editor :deep(.cm-editor.cm-focused) { outline: 2px solid var(--ui-primary); outline-offset: -1px; }
 .editor :deep(.cm-scroller) { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height: 1.5; }
 .editor :deep(.cm-content) { caret-color: var(--ui-text); }
@@ -301,7 +316,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .config-hint a, .config-hint .link { color: var(--ui-primary); }
 .config-hint .link:hover { text-decoration: underline; }
 .config summary .badge { margin-left: .4rem; font-weight: 500; }
-.results { position: sticky; top: 1.5rem; max-height: calc(100vh - 3rem); overflow-y: auto; padding: 1rem; border: 1px solid var(--ui-border); border-radius: .5rem; background: var(--ui-bg-elevated); }
+.results { position: sticky; top: calc(var(--ui-header-height) + 1rem); max-height: calc(100vh - var(--ui-header-height) - 2rem); scroll-margin-top: calc(var(--ui-header-height) + 1rem); overflow-y: auto; padding: 1rem; border: 1px solid var(--ui-border); border-radius: .5rem; background: var(--ui-bg-elevated); }
 .status { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; font-size: .88rem; }
 .badge { border: 1px solid var(--ui-border); border-radius: 1rem; padding: .1rem .55rem; font-size: .75rem; }
 .summary { margin: .6rem 0; }
@@ -319,17 +334,27 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .meta { display: block; margin: .2rem 0 0 3.8rem; font-size: .78rem; color: var(--ui-text-muted); }
 .meta a { color: var(--ui-primary); }
 .fixable { margin-left: .3rem; padding: 0 .4rem; border-radius: 1rem; background: color-mix(in srgb, var(--ui-success) 15%, transparent); color: var(--ui-success); }
-@media (max-width: 860px) {
+/* The layout follows the space the page gives it, not the viewport. */
+@container (max-width: 760px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
   .results { position: static; max-height: none; }
-  .editor :deep(.cm-editor) { height: 55vh; }
+  .editor :deep(.cm-editor) { height: 55vh; height: 55dvh; }
+  .result-jump { display: block; }
 }
-@media (max-width: 600px) {
+@container (max-width: 560px) {
   .toolbar { display: grid; grid-template-columns: minmax(0, 1fr); }
   .example-picker { min-width: 0; }
-  .example-picker .field { box-sizing: border-box; width: 100%; font-size: 1rem; }
+  .example-picker .field { box-sizing: border-box; width: 100%; }
   .spacer { display: none; }
   .toolbar-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .toolbar-actions button { min-width: 0; white-space: nowrap; }
+  .toolbar-actions > * { min-width: 0; justify-content: center; white-space: nowrap; }
+}
+@media (max-width: 760px) {
+  /* 16px text on phones keeps iOS Safari from zooming in when a field gets focus. */
+  .field, .editor :deep(.cm-editor) { font-size: 1rem; }
+}
+@media (pointer: coarse) {
+  .toolbar-actions > * { min-height: 2.75rem; }
+  .field { min-height: 2.75rem; }
 }
 </style>

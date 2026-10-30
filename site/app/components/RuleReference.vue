@@ -35,6 +35,7 @@ const DEFAULT_RULE = 'C150'
 
 const allRules = rules as Rule[]
 const configs = useConfigLibrary()
+const { ask } = useConfirm()
 const route = useRoute()
 const router = useRouter()
 const query = ref('')
@@ -66,11 +67,11 @@ const configLabel = computed(() => usingWorkingConfig.value
   ? `${configs.label.value}${configs.status.value === 'draft' ? ' (local draft)' : configs.status.value === 'saved' ? ' (saved in this browser)' : ''}`
   : exampleConfig.value.trim() ? 'Example settings' : 'LinTi defaults')
 
-function openRuleInConfigurator() {
+async function openRuleInConfigurator() {
   if (!usingWorkingConfig.value) {
     const source = exampleConfig.value || presetText(presets[0]!)
     if (configs.dirty.value && configs.yaml.value !== source
-      && !confirm('Replace the current unsaved configuration with this example?')) return
+      && !(await ask('Replace the current unsaved configuration with this example?'))) return
     configs.startDraft(`${selected.value.id} variant`, source)
   }
   // Nuxt applies anchor scrolling after its own navigation scroll has settled.
@@ -149,10 +150,17 @@ function chooseExample(example?: Example) {
   error.value = ''
 }
 
+const detail = ref<HTMLElement | null>(null)
+
 function selectRule(rule: Rule) {
   selectedId.value = rule.id
   usingWorkingConfig.value = false
   void router.replace({ query: { ...route.query, rule: rule.id, config: undefined } })
+  // Stacked layout (phones, narrow tablets): the detail sits below the list.
+  const section = detail.value
+  if (section && section.getBoundingClientRect().top > window.innerHeight * 0.6) {
+    void nextTick(() => section.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
 }
 
 // Reset the example synchronously, before applyQuery applies its config mode.
@@ -237,7 +245,9 @@ function jumpTo(issue: Finding) {
   const line = Math.min(Math.max(issue.line, 1), lines.length)
   const offset = lines.slice(0, line - 1).reduce((total, text) => total + text.length + 1, 0)
   const position = offset + Math.min(Math.max(issue.column - 1, 0), lines[line - 1]!.length)
-  editor.focus()
+  // On touch screens focusing would open the keyboard over the code.
+  if (matchMedia('(pointer: fine)').matches) editor.focus()
+  else editor.scrollIntoView({ behavior: 'smooth', block: 'center' })
   editor.setSelectionRange(position, position)
   const lineHeight = Number.parseFloat(getComputedStyle(editor).lineHeight)
   if (Number.isFinite(lineHeight)) editor.scrollTop = Math.max(0, (line - 2) * lineHeight)
@@ -259,156 +269,160 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="reference">
-    <div class="reference-sidebar">
-      <label class="field-label" for="rule-search">Find a rule</label>
-      <UInput id="rule-search" v-model="query" type="search" icon="i-lucide-search" size="lg" placeholder="ID, name, description…" class="w-full" :ui="fieldUi" />
-      <label class="field-label" for="rule-group">Category</label>
-      <USelect id="rule-group" v-model="group" :items="groupItems" icon="i-lucide-list-filter" size="lg" class="w-full" :ui="fieldUi" />
-      <p class="rule-count">{{ filtered.length }} of {{ allRules.length }} rules</p>
-      <div class="rule-list" role="list" aria-label="LinTi rules">
-        <button
-          v-for="rule in filtered"
-          :key="rule.id"
-          class="rule-choice"
-          :class="{ active: selected.id === rule.id }"
-          :aria-current="selected.id === rule.id ? 'true' : undefined"
-          @click="selectRule(rule)"
-        >
-          <span class="rule-choice-title"><code>{{ rule.id }}</code> {{ rule.name }}</span>
-          <span class="rule-choice-description">{{ rule.description }}</span>
-        </button>
-        <p v-if="!filtered.length" class="empty">No matching rules.</p>
-      </div>
-    </div>
-
-    <section v-if="selected" class="rule-detail" :aria-label="`${selected.id}: ${selected.name}`">
-      <div class="rule-header">
-        <span class="rule-code">{{ selected.id }}</span>
-        <span class="badge">{{ selected.group_name }}</span>
-        <span class="badge">{{ selected.severity }}</span>
-        <span v-if="selected.auto_fix" class="badge">Auto-fix</span>
-      </div>
-      <h2>{{ selected.name }}</h2>
-      <p class="lede">{{ selected.description }}</p>
-      <p v-if="selected.deprecated_by" class="notice">Deprecated; use {{ selected.deprecated_by }} instead.</p>
-      <p v-if="selected.previous_ids.length" class="muted">Previous ID: {{ selected.previous_ids.join(', ') }}</p>
-      <div v-if="selected.explanation" class="explanation">{{ selected.explanation }}</div>
-
-      <div class="playground">
-        <h3>Try {{ selected.id }}</h3>
-        <p>Edit an example and run the real Python rule in your browser. The first run loads Pyodide; subsequent runs reuse it.</p>
-        <div v-if="selected.examples.length" class="example-actions">
-          <UButton
-            v-for="(example, index) in selected.examples"
-            :key="index"
-            :icon="example.valid ? 'i-lucide-circle-check' : 'i-lucide-circle-x'"
-            color="neutral"
-            variant="outline"
-            size="sm"
-            class="example-button"
-            @click="chooseExample(example)"
+  <div class="lint-tool">
+    <ConfirmDialog />
+    <div class="reference">
+      <div class="reference-sidebar">
+        <label class="field-label" for="rule-search">Find a rule</label>
+        <UInput id="rule-search" v-model="query" type="search" icon="i-lucide-search" size="lg" placeholder="ID, name, description…" class="w-full" :ui="fieldUi" />
+        <label class="field-label" for="rule-group">Category</label>
+        <USelect id="rule-group" v-model="group" :items="groupItems" icon="i-lucide-list-filter" size="lg" class="w-full" :ui="fieldUi" />
+        <p class="rule-count">{{ filtered.length }} of {{ allRules.length }} rules</p>
+        <div class="rule-list" role="list" aria-label="LinTi rules">
+          <button
+            v-for="rule in filtered"
+            :key="rule.id"
+            class="rule-choice"
+            :class="{ active: selected.id === rule.id }"
+            :aria-current="selected.id === rule.id ? 'true' : undefined"
+            @click="selectRule(rule)"
           >
-            {{ example.description || (example.valid ? 'Valid example' : 'Invalid example') }}
-          </UButton>
+            <span class="rule-choice-title"><code>{{ rule.id }}</code> {{ rule.name }}</span>
+            <span class="rule-choice-description">{{ rule.description }}</span>
+          </button>
+          <p v-if="!filtered.length" class="empty">No matching rules.</p>
         </div>
-        <label class="field-label" for="procedure">TI procedure</label>
-        <USelect id="procedure" v-model="procedure" :items="procedureItems" size="lg" class="w-44 max-w-full" :ui="fieldUi" />
-        <label class="field-label" for="ti-code">TI code</label>
-        <textarea id="ti-code" ref="codeEditor" v-model="code" class="code-editor" spellcheck="false" rows="10" aria-label="TI code" />
-        <div class="config-handoff">
-          <details class="config-inspection">
-            <summary>Configuration used: {{ configLabel }}</summary>
-            <div class="config-inspection-body">
-              <p v-if="!lintiYaml.trim()" class="muted">This example uses LinTi's default configuration.</p>
-              <p v-if="!lintiYaml.trim() && !selected.enabled_by_default" class="muted">Running {{ selected.id }} here selects the rule explicitly, so the ‘<code>enabled: false</code>’ setting from the default config is overwritten.</p>
-              <p v-if="lintiYaml.trim()" class="muted">This YAML is used for the run:</p>
-              <pre v-if="lintiYaml.trim()"><code>{{ lintiYaml }}</code></pre>
-              <template v-else-if="selected.default_config">
-                <p class="muted">Default values for {{ selected.id }} in a full scan:</p>
-                <pre><code>{{ selected.default_config }}</code></pre>
-              </template>
-              <p v-if="lintiYaml.trim()" class="muted">Running {{ selected.id }} here selects the rule explicitly. If this YAML sets <code>enabled: false</code>, that setting is overwritten for this run.</p>
-              <button v-if="usingWorkingConfig" type="button" class="text-action" @click="useExampleSettings()">Use example settings instead</button>
-            </div>
-          </details>
-          <UButton icon="i-lucide-sliders-horizontal" color="neutral" variant="outline" size="sm" @click="openRuleInConfigurator()">Adjust {{ selected.id }} in configurator</UButton>
+      </div>
+
+      <section v-if="selected" ref="detail" class="rule-detail" :aria-label="`${selected.id}: ${selected.name}`">
+        <div class="rule-header">
+          <span class="rule-code">{{ selected.id }}</span>
+          <span class="badge">{{ selected.group_name }}</span>
+          <span class="badge">{{ selected.severity }}</span>
+          <span v-if="selected.auto_fix" class="badge">Auto-fix</span>
         </div>
-        <div v-if="shownContext.length" class="context">
-          <p class="context-title">Runs with</p>
-          <div v-for="field in shownContext" :key="field" class="context-field">
-            <div class="context-label">
-              <label class="field-label" :for="`context-${field}`">{{ contextLabels[field] }}</label>
-              <UButton
-                size="xs"
-                color="neutral"
-                variant="ghost"
-                icon="i-lucide-x"
-                :aria-label="`Remove ${contextLabels[field]}`"
-                @click="removeContext(field)"
-              />
-            </div>
-            <UInput v-if="field === 'parameters'" id="context-parameters" v-model="parameters" placeholder="pYear, pVersion" class="w-full" :ui="fieldUi" />
-            <UInput v-else-if="field === 'variables'" id="context-variables" v-model="variables" placeholder="vRegion, vAmount" class="w-full" :ui="fieldUi" />
-            <div v-else class="datasource-fields">
-              <UInput id="context-datasource" v-model="datasourceType" placeholder="ODBC" aria-label="Data source type" :ui="fieldUi" />
-              <UInput v-model="datasourceQuery" placeholder="SELECT … FROM …" aria-label="Data source query" class="w-full" :ui="fieldUi" />
+        <h2>{{ selected.name }}</h2>
+        <p class="lede">{{ selected.description }}</p>
+        <p v-if="selected.deprecated_by" class="notice">Deprecated; use {{ selected.deprecated_by }} instead.</p>
+        <p v-if="selected.previous_ids.length" class="muted">Previous ID: {{ selected.previous_ids.join(', ') }}</p>
+        <div v-if="selected.explanation" class="explanation">{{ selected.explanation }}</div>
+
+        <div class="playground">
+          <h3>Try {{ selected.id }}</h3>
+          <p>Edit an example and run the real Python rule in your browser. The first run loads Pyodide; subsequent runs reuse it.</p>
+          <div v-if="selected.examples.length" class="example-actions">
+            <UButton
+              v-for="(example, index) in selected.examples"
+              :key="index"
+              :icon="example.valid ? 'i-lucide-circle-check' : 'i-lucide-circle-x'"
+              color="neutral"
+              variant="outline"
+              size="sm"
+              class="example-button"
+              @click="chooseExample(example)"
+            >
+              {{ example.description || (example.valid ? 'Valid example' : 'Invalid example') }}
+            </UButton>
+          </div>
+          <label class="field-label" for="procedure">TI procedure</label>
+          <USelect id="procedure" v-model="procedure" :items="procedureItems" size="lg" class="w-44 max-w-full" :ui="fieldUi" />
+          <label class="field-label" for="ti-code">TI code</label>
+          <textarea id="ti-code" ref="codeEditor" v-model="code" class="code-editor" spellcheck="false" rows="10" aria-label="TI code" />
+          <div class="config-handoff">
+            <details class="config-inspection">
+              <summary>Configuration used: {{ configLabel }}</summary>
+              <div class="config-inspection-body">
+                <p v-if="!lintiYaml.trim()" class="muted">This example uses LinTi's default configuration.</p>
+                <p v-if="!lintiYaml.trim() && !selected.enabled_by_default" class="muted">Running {{ selected.id }} here selects the rule explicitly, so the ‘<code>enabled: false</code>’ setting from the default config is overwritten.</p>
+                <p v-if="lintiYaml.trim()" class="muted">This YAML is used for the run:</p>
+                <pre v-if="lintiYaml.trim()"><code>{{ lintiYaml }}</code></pre>
+                <template v-else-if="selected.default_config">
+                  <p class="muted">Default values for {{ selected.id }} in a full scan:</p>
+                  <pre><code>{{ selected.default_config }}</code></pre>
+                </template>
+                <p v-if="lintiYaml.trim()" class="muted">Running {{ selected.id }} here selects the rule explicitly. If this YAML sets <code>enabled: false</code>, that setting is overwritten for this run.</p>
+                <button v-if="usingWorkingConfig" type="button" class="text-action" @click="useExampleSettings()">Use example settings instead</button>
+              </div>
+            </details>
+            <UButton icon="i-lucide-sliders-horizontal" color="neutral" variant="outline" size="sm" @click="openRuleInConfigurator()">Adjust {{ selected.id }} in configurator</UButton>
+          </div>
+          <div v-if="shownContext.length" class="context">
+            <p class="context-title">Runs with</p>
+            <div v-for="field in shownContext" :key="field" class="context-field">
+              <div class="context-label">
+                <label class="field-label" :for="`context-${field}`">{{ contextLabels[field] }}</label>
+                <UButton
+                  size="sm"
+                  color="neutral"
+                  variant="ghost"
+                  icon="i-lucide-x"
+                  :aria-label="`Remove ${contextLabels[field]}`"
+                  @click="removeContext(field)"
+                />
+              </div>
+              <UInput v-if="field === 'parameters'" id="context-parameters" v-model="parameters" placeholder="pYear, pVersion" class="w-full" :ui="fieldUi" />
+              <UInput v-else-if="field === 'variables'" id="context-variables" v-model="variables" placeholder="vRegion, vAmount" class="w-full" :ui="fieldUi" />
+              <div v-else class="datasource-fields">
+                <UInput id="context-datasource" v-model="datasourceType" placeholder="ODBC" aria-label="Data source type" :ui="fieldUi" />
+                <UInput v-model="datasourceQuery" placeholder="SELECT … FROM …" aria-label="Data source query" class="w-full" :ui="fieldUi" />
+              </div>
             </div>
           </div>
-        </div>
-        <div v-if="hiddenContext.length" class="context-add">
-          <span class="muted">Add:</span>
-          <UButton
-            v-for="field in hiddenContext"
-            :key="field"
-            size="xs"
-            color="neutral"
-            variant="soft"
-            icon="i-lucide-plus"
-            @click="addContext(field)"
-          >
-            {{ contextLabels[field] }}
-          </UButton>
-        </div>
-        <div class="run-actions">
-          <UButton icon="i-lucide-play" :loading="busy" @click="run()">{{ busy ? 'Loading LinTi / checking…' : `Run ${selected.id}` }}</UButton>
-          <UButton v-if="selected.auto_fix" icon="i-lucide-wand-sparkles" color="neutral" variant="outline" :disabled="busy" @click="run(true)">Apply auto-fix</UButton>
-        </div>
-        <p v-if="error" role="alert" class="error">{{ error }}</p>
-        <section v-if="result" class="findings" aria-live="polite" aria-label="Findings">
-          <p class="summary">
-            <strong>{{ result.issues.length }}</strong> finding{{ result.issues.length === 1 ? '' : 's' }}
-            <span v-if="result.issues.length" class="muted">
-              · {{ errorCount }} error{{ errorCount === 1 ? '' : 's' }}, {{ warningCount }} warning{{ warningCount === 1 ? '' : 's' }}, {{ fixableCount }} auto-fixable
-            </span>
-          </p>
-          <p v-if="result.fixes" class="success">Applied {{ result.fixes }} fix{{ result.fixes === 1 ? '' : 'es' }}.</p>
-          <ul v-if="result.warnings.length" class="warnings">
-            <li v-for="(warning, index) in result.warnings" :key="index">{{ warning }}</li>
-          </ul>
-          <p v-if="!result.issues.length" class="success">No findings for {{ selected.id }}. 🎉</p>
-          <ol v-else class="issues">
-            <li v-for="(issue, index) in result.issues" :key="index" :class="`severity-${issue.severity}`">
-              <button class="issue" :aria-label="`Line ${issue.line}, column ${issue.column}: ${issue.message}`" @click="jumpTo(issue)">
-                <span class="location">{{ issue.line }}:{{ issue.column }}</span>
-                <span class="message">{{ issue.message }}</span>
-              </button>
-              <span class="meta">
-                <code>{{ issue.rule_id }}</code> · {{ procedure }}
-                <span v-if="issue.fixable" class="fixable">auto-fix</span>
+          <div v-if="hiddenContext.length" class="context-add">
+            <span class="muted">Add:</span>
+            <UButton
+              v-for="field in hiddenContext"
+              :key="field"
+              size="sm"
+              color="neutral"
+              variant="soft"
+              icon="i-lucide-plus"
+              @click="addContext(field)"
+            >
+              {{ contextLabels[field] }}
+            </UButton>
+          </div>
+          <div class="run-actions">
+            <UButton icon="i-lucide-play" :loading="busy" @click="run()">{{ busy ? 'Loading LinTi / checking…' : `Run ${selected.id}` }}</UButton>
+            <UButton v-if="selected.auto_fix" icon="i-lucide-wand-sparkles" color="neutral" variant="outline" :disabled="busy" @click="run(true)">Apply auto-fix</UButton>
+          </div>
+          <p v-if="error" role="alert" class="error">{{ error }}</p>
+          <section v-if="result" class="findings" aria-live="polite" aria-label="Findings">
+            <p class="summary">
+              <strong>{{ result.issues.length }}</strong> finding{{ result.issues.length === 1 ? '' : 's' }}
+              <span v-if="result.issues.length" class="muted">
+                · {{ errorCount }} error{{ errorCount === 1 ? '' : 's' }}, {{ warningCount }} warning{{ warningCount === 1 ? '' : 's' }}, {{ fixableCount }} auto-fixable
               </span>
-            </li>
-          </ol>
-        </section>
-      </div>
+            </p>
+            <p v-if="result.fixes" class="success">Applied {{ result.fixes }} fix{{ result.fixes === 1 ? '' : 'es' }}.</p>
+            <ul v-if="result.warnings.length" class="warnings">
+              <li v-for="(warning, index) in result.warnings" :key="index">{{ warning }}</li>
+            </ul>
+            <p v-if="!result.issues.length" class="success">No findings for {{ selected.id }}. 🎉</p>
+            <ol v-else class="issues">
+              <li v-for="(issue, index) in result.issues" :key="index" :class="`severity-${issue.severity}`">
+                <button class="issue" :aria-label="`Line ${issue.line}, column ${issue.column}: ${issue.message}`" @click="jumpTo(issue)">
+                  <span class="location">{{ issue.line }}:{{ issue.column }}</span>
+                  <span class="message">{{ issue.message }}</span>
+                </button>
+                <span class="meta">
+                  <code>{{ issue.rule_id }}</code> · {{ procedure }}
+                  <span v-if="issue.fixable" class="fixable">auto-fix</span>
+                </span>
+              </li>
+            </ol>
+          </section>
+        </div>
 
-    </section>
+      </section>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.reference { display: grid; grid-template-columns: minmax(14rem, 19rem) minmax(0, 1fr); gap: 2rem; margin-top: 2rem; align-items: start; }
-.reference-sidebar { position: sticky; top: 1.5rem; max-height: calc(100vh - 3rem); display: flex; flex-direction: column; min-width: 0; }
+.lint-tool { container-type: inline-size; }
+.reference { display: grid; grid-template-columns: minmax(14rem, 19rem) minmax(0, 1fr); gap: 2rem; align-items: start; }
+.reference-sidebar { position: sticky; top: calc(var(--ui-header-height) + 1rem); max-height: calc(100vh - var(--ui-header-height) - 2rem); display: flex; flex-direction: column; min-width: 0; }
 .field-label { display: block; margin: .7rem 0 .35rem; font-size: .85rem; font-weight: 650; }
 .rule-count, .muted { color: var(--ui-text-muted); font-size: .85rem; }
 .rule-count { margin: .5rem 0; }
@@ -418,7 +432,7 @@ onBeforeUnmount(() => {
 .rule-choice.active { box-shadow: inset 3px 0 var(--ui-primary); }
 .rule-choice-title { display: block; font-size: .9rem; font-weight: 650; }
 .rule-choice-description { display: -webkit-box; overflow: hidden; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin-top: .15rem; color: var(--ui-text-muted); font-size: .8rem; line-height: 1.35; }
-.rule-detail { min-width: 0; }
+.rule-detail { min-width: 0; scroll-margin-top: calc(var(--ui-header-height) + 1rem); }
 .rule-header, .example-actions, .run-actions { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
 .rule-code { font-size: 1.15rem; font-weight: 750; color: var(--ui-primary); }
 .badge { border: 1px solid var(--ui-border); border-radius: 1rem; padding: .15rem .55rem; font-size: .75rem; }
@@ -461,12 +475,19 @@ onBeforeUnmount(() => {
 .config-inspection-body pre { margin: .5rem 0; padding: .6rem; overflow-x: auto; border-radius: .4rem; background: var(--ui-bg-elevated); }
 .text-action { color: var(--ui-primary); text-decoration: underline; text-underline-offset: .15rem; }
 .empty { padding: .8rem; }
-@media (max-width: 760px) {
+/* The layout follows the space the page gives it, not the viewport: Docus'
+   navigation column takes a third of a tablet screen. */
+@container (max-width: 680px) {
   .reference { grid-template-columns: minmax(0, 1fr); gap: 1.5rem; }
   .reference-sidebar { position: static; max-height: none; }
   .rule-list { max-height: 15rem; }
   .playground { padding: 1rem; }
+}
+@media (max-width: 760px) {
   /* 16px text on phones keeps iOS Safari from zooming in when the editor gets focus. */
   .code-editor { font-size: 1rem; }
+}
+@media (pointer: coarse) {
+  .context-label :deep(button) { min-width: 2.75rem; min-height: 2.75rem; justify-content: center; }
 }
 </style>

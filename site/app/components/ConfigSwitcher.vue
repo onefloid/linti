@@ -60,4 +60,8 @@ function choose(event: Event) {
 .switcher-label { display: flex; flex: 1; flex-direction: column; gap: .2rem; min-width: 0; font-size: .8rem; font-weight: 650; }
 .switcher-label select { box-sizing: border-box; width: 100%; min-width: 0; padding: .35rem .5rem; border: 1px solid var(--ui-border); border-radius: .4rem; color: var(--ui-text); background: var(--ui-bg); font-size: 1rem; }
 .switcher-actions { display: flex; flex: none; gap: .25rem; }
+@media (pointer: coarse) {
+  .switcher-label select { min-height: 2.75rem; }
+  .switcher-actions :deep(button) { min-width: 2.75rem; min-height: 2.75rem; justify-content: center; }
+}
 </style>
