@@ -1,7 +1,8 @@
-// The public URL including the GitHub Pages subpath. Docus builds canonical and
-// og:url as site.url + route path, and its sitemap reads only NUXT_SITE_URL.
-const siteUrl = 'https://onefloid.github.io/linti'
-process.env.NUXT_SITE_URL ||= siteUrl
+// site.url stays a bare origin: nuxt-site-config rejects a path and the OG
+// image URLs add app.baseURL themselves. Docus' canonical/og:url get the
+// subpath from plugins/subpath-urls.ts. Its sitemap reads only environment
+// variables; CI_PAGES_URL is one nuxt-site-config does not pick up as well.
+process.env.CI_PAGES_URL ||= 'https://onefloid.github.io/linti'
 
 export default defineNuxtConfig({
   extends: ['docus'],
@@ -11,7 +12,7 @@ export default defineNuxtConfig({
   },
   site: {
     name: 'LinTi',
-    url: siteUrl,
+    url: 'https://onefloid.github.io',
   },
   robots: {
     robotsTxt: false,

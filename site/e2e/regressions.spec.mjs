@@ -13,24 +13,31 @@ async function storedNames(page) {
 }
 
 test('a second open tab keeps profiles saved in the first', async ({ context }) => {
-  // Saving validates the YAML with Pyodide, which loads on first use.
-  test.setTimeout(120_000)
   const tabA = await context.newPage()
   const tabB = await context.newPage()
   for (const tab of [tabA, tabB]) tab.on('dialog', dialog => dialog.accept())
   await tabB.goto('/linti/rules?rule=F110')
   await expect(tabB.getByRole('heading', { name: 'Try F110' })).toBeVisible()
 
-  await tabA.goto(`/linti/config${shareHash('Beta', 'rules:\n  keyword_casing:\n    enabled: false\n')}`)
+  // Saving in tab A writes the library like this; the Save button would also
+  // validate with Pyodide first, which this test does not need.
+  await tabA.goto('/linti/config')
   await tabA.locator('.configurator .cm-editor').waitFor({ state: 'attached' })
-  await tabA.getByRole('button', { name: 'Save configuration' }).click()
-  await expect.poll(() => storedNames(tabA), { timeout: 90_000 }).toContain('Beta')
+  await tabA.evaluate((key) => {
+    const library = JSON.parse(localStorage.getItem(key) || 'null')
+      ?? { version: 1, profiles: [], draft: { yaml: '', baseId: null, name: '' } }
+    const now = new Date().toISOString()
+    library.profiles.push({ id: 'beta-id', name: 'Beta', yaml: 'rules: {}\n', createdAt: now, updatedAt: now })
+    localStorage.setItem(key, JSON.stringify(library))
+  }, LIBRARY_KEY)
 
   await tabB.getByRole('button', { name: 'Adjust F110 in configurator' }).click()
   await tabB.waitForURL(url => url.pathname === '/linti/config')
   await tabB.locator('.configurator .cm-editor').waitFor({ state: 'attached' })
   await expect.poll(() => storedNames(tabB)).toContain('Beta')
   await expect(tabB.locator('.config-switcher select option', { hasText: 'Beta' })).toHaveCount(1)
+  await tabA.reload()
+  expect(await storedNames(tabA)).toContain('Beta')
 })
 
 test('a share link pasted into the open configurator replaces the draft', async ({ page }) => {
