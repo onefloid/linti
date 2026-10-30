@@ -65,10 +65,9 @@ jobs:
           path: site/.output/public
 
   deploy:
-    # Pull requests from this repository deploy too, so a feature branch can be
-    # tried live. actions/deploy-pages has no previews: the last deploy (PR or
-    # main) is what the site shows. Fork PRs lack the Pages token and are skipped.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # Only main deploys. Pull requests and other branches build and test the
+    # site but never publish it.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     # One fixed group, never cancelled, so two deploys cannot race.
